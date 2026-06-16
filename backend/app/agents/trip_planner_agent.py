@@ -75,8 +75,7 @@ class MultiAgentTripPlanner:
             # 3. 酒店推荐 Agent
             self.hotel_agent = create_react_agent(self.llm, tools=[amap_maps_text_search], prompt=HOTEL_AGENT_PROMPT)
 
-            # 4. 行程规划 LLM (使用 Structured Output)
-            self.planner_llm = self.llm.with_structured_output(TripPlan)
+
 
             print(f"✅ 多智能体系统初始化成功 (LangChain)")
 
