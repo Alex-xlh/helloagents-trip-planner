@@ -89,7 +89,7 @@ async def search_poi(keywords: str, city: str = "北京"):
 @router.get(
     "/photo",
     summary="获取景点图片",
-    description="根据景点名称从Unsplash获取图片"
+    description="根据景点名称从高德获取图片"
 )
 async def get_attraction_photo(name: str):
     """
@@ -102,14 +102,37 @@ async def get_attraction_photo(name: str):
         图片URL
     """
     try:
-        unsplash_service = get_unsplash_service()
-
-        # 搜索景点图片
-        photo_url = unsplash_service.get_photo_url(f"{name} China landmark")
-
-        if not photo_url:
-            # 如果没找到,尝试只用景点名称搜索
-            photo_url = unsplash_service.get_photo_url(name)
+        from ...config import get_settings
+        import httpx
+        
+        settings = get_settings()
+        api_key = settings.amap_api_key
+        
+        photo_url = None
+        
+        if api_key:
+            # 调用高德POI搜索API获取图片
+            url = "https://restapi.amap.com/v3/place/text"
+            params = {
+                "keywords": name,
+                "key": api_key,
+                "extensions": "all",  # 需要设置为all才能获取深度信息(含图片)
+                "offset": 1,
+                "page": 1
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("status") == "1" and data.get("pois"):
+                        poi = data["pois"][0]
+                        photos = poi.get("photos", [])
+                        if photos and len(photos) > 0:
+                            # 过滤掉不存在的或空的URL
+                            valid_photos = [p for p in photos if isinstance(p, dict) and p.get("url")]
+                            if valid_photos:
+                                photo_url = valid_photos[0]["url"]
 
         return {
             "success": True,
@@ -122,8 +145,14 @@ async def get_attraction_photo(name: str):
 
     except Exception as e:
         print(f"❌ 获取景点图片失败: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"获取景点图片失败: {str(e)}"
-        )
+        # 为了不影响前端，这里不要抛出500，直接返回null图片
+        return {
+            "success": True,
+            "message": f"获取景点图片失败: {str(e)}",
+            "data": {
+                "name": name,
+                "photo_url": None
+            }
+        }
+
 

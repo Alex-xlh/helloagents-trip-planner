@@ -790,8 +790,16 @@ const exportAsPDF = async () => {
 // 初始化地图
 const initMap = async () => {
   try {
+    // 注入高德地图安全密钥
+    const securityCode = import.meta.env.VITE_AMAP_SECURITY_CODE
+    if (securityCode) {
+      ;(window as any)._AMapSecurityConfig = {
+        securityJsCode: securityCode,
+      }
+    }
+
     const AMap = await AMapLoader.load({
-      key: '25dfaf050fe024803e96badd370e8029', // 高德地图Web服务API Key
+      key: import.meta.env.VITE_AMAP_JS_KEY || '', // 高德地图前端 Web JS API Key
       version: '2.0',
       plugins: ['AMap.Marker', 'AMap.Polyline', 'AMap.InfoWindow']
     })
