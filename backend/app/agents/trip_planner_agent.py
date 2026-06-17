@@ -97,26 +97,41 @@ class MultiAgentTripPlanner:
             print(f"{'='*60}\n")
 
             # 步骤1: 搜索景点
-            print("📍 步骤1: 搜索景点...")
+            import concurrent.futures
+
             keywords = request.preferences[0] if request.preferences else "景点"
             attraction_query = f"请搜索{request.city}的{keywords}相关景点"
-            attraction_res = self.attraction_agent.invoke({"messages": [("human", attraction_query)]})
-            attraction_response = attraction_res["messages"][-1].content
-            print(f"景点搜索结果: {attraction_response[:200]}...\n")
-
-            # 步骤2: 查询天气
-            print("🌤️  步骤2: 查询天气...")
             weather_query = f"请查询{request.city}的天气信息"
-            weather_res = self.weather_agent.invoke({"messages": [("human", weather_query)]})
-            weather_response = weather_res["messages"][-1].content
-            print(f"天气查询结果: {weather_response[:200]}...\n")
-
-            # 步骤3: 搜索酒店
-            print("🏨 步骤3: 搜索酒店...")
             hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
-            hotel_res = self.hotel_agent.invoke({"messages": [("human", hotel_query)]})
-            hotel_response = hotel_res["messages"][-1].content
-            print(f"酒店搜索结果: {hotel_response[:200]}...\n")
+
+            def fetch_attractions():
+                print("📍 步骤1: 正在并发搜索景点...")
+                res = self.attraction_agent.invoke({"messages": [("human", attraction_query)]})
+                return res["messages"][-1].content
+
+            def fetch_weather():
+                print("🌤️  步骤2: 正在并发查询天气...")
+                res = self.weather_agent.invoke({"messages": [("human", weather_query)]})
+                return res["messages"][-1].content
+
+            def fetch_hotels():
+                print("🏨 步骤3: 正在并发搜索酒店...")
+                res = self.hotel_agent.invoke({"messages": [("human", hotel_query)]})
+                return res["messages"][-1].content
+
+            print("🔄 正在多线程并发执行前置三大智能体(景点/天气/酒店)...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                future_attractions = executor.submit(fetch_attractions)
+                future_weather = executor.submit(fetch_weather)
+                future_hotels = executor.submit(fetch_hotels)
+
+                attraction_response = future_attractions.result()
+                weather_response = future_weather.result()
+                hotel_response = future_hotels.result()
+
+            print(f"景点搜索结果: {attraction_response[:100]}...\n")
+            print(f"天气查询结果: {weather_response[:100]}...\n")
+            print(f"酒店搜索结果: {hotel_response[:100]}...\n")
 
             # 4. 行程规划 LLM
             # 不使用 with_structured_output 因为部分模型不支持 response_format
