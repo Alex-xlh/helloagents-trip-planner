@@ -1,19 +1,28 @@
 <template>
   <div class="home-container">
-    <!-- 背景装饰 -->
+    <!-- 背景装饰 (Liquid Glass Fluid Shapes) -->
     <div class="bg-decoration">
       <div class="circle circle-1"></div>
       <div class="circle circle-2"></div>
       <div class="circle circle-3"></div>
+      <div class="glass-overlay"></div>
     </div>
 
     <!-- 页面标题 -->
     <div class="page-header">
       <div class="icon-wrapper">
-        <span class="icon">✈️</span>
+        <svg class="animated-plane" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22 16.5L12 11L2.5 16.5C1.5 17 0.5 16 1 15L6.5 2.5C7 1.5 8 1 9 1H15C16 1 17 1.5 17.5 2.5L23 15C23.5 16 22.5 17 22 16.5Z" fill="url(#plane-gradient)" transform="rotate(45 12 12)"/>
+          <defs>
+            <linearGradient id="plane-gradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#0EA5E9" />
+              <stop offset="1" stop-color="#38BDF8" />
+            </linearGradient>
+          </defs>
+        </svg>
       </div>
-      <h1 class="page-title">智能旅行助手</h1>
-      <p class="page-subtitle">基于AI的个性化旅行规划,让每一次出行都完美无忧</p>
+      <h1 class="page-title">智能旅行规划</h1>
+      <p class="page-subtitle">高端、优雅、个性化的 AI 旅行向导</p>
     </div>
 
     <a-card class="form-card" :bordered="false">
@@ -25,7 +34,7 @@
         <!-- 第一步:目的地和日期 -->
         <div class="form-section">
           <div class="section-header">
-            <span class="section-icon">📍</span>
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
             <span class="section-title">目的地与日期</span>
           </div>
 
@@ -42,7 +51,7 @@
                   class="custom-input"
                 >
                   <template #prefix>
-                    <span style="color: #1890ff;">🏙️</span>
+                    <svg style="width:16px;height:16px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M12 14h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>
                   </template>
                 </a-input>
               </a-form-item>
@@ -92,7 +101,7 @@
         <!-- 第二步:偏好设置 -->
         <div class="form-section">
           <div class="section-header">
-            <span class="section-icon">⚙️</span>
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
             <span class="section-title">偏好设置</span>
           </div>
 
@@ -103,10 +112,10 @@
                   <span class="form-label">交通方式</span>
                 </template>
                 <a-select v-model:value="formData.transportation" size="large" class="custom-select">
-                  <a-select-option value="公共交通">🚇 公共交通</a-select-option>
-                  <a-select-option value="自驾">🚗 自驾</a-select-option>
-                  <a-select-option value="步行">🚶 步行</a-select-option>
-                  <a-select-option value="混合">🔀 混合</a-select-option>
+                  <a-select-option value="公共交通">公共交通</a-select-option>
+                  <a-select-option value="自驾">自驾</a-select-option>
+                  <a-select-option value="步行">步行</a-select-option>
+                  <a-select-option value="混合">混合方式</a-select-option>
                 </a-select>
               </a-form-item>
             </a-col>
@@ -116,10 +125,10 @@
                   <span class="form-label">住宿偏好</span>
                 </template>
                 <a-select v-model:value="formData.accommodation" size="large" class="custom-select">
-                  <a-select-option value="经济型酒店">💰 经济型酒店</a-select-option>
-                  <a-select-option value="舒适型酒店">🏨 舒适型酒店</a-select-option>
-                  <a-select-option value="豪华酒店">⭐ 豪华酒店</a-select-option>
-                  <a-select-option value="民宿">🏡 民宿</a-select-option>
+                  <a-select-option value="经济型酒店">经济型酒店</a-select-option>
+                  <a-select-option value="舒适型酒店">舒适型酒店</a-select-option>
+                  <a-select-option value="豪华酒店">豪华度假酒店</a-select-option>
+                  <a-select-option value="民宿">精品民宿</a-select-option>
                 </a-select>
               </a-form-item>
             </a-col>
@@ -130,12 +139,12 @@
                 </template>
                 <div class="preference-tags">
                   <a-checkbox-group v-model:value="formData.preferences" class="custom-checkbox-group">
-                    <a-checkbox value="历史文化" class="preference-tag">🏛️ 历史文化</a-checkbox>
-                    <a-checkbox value="自然风光" class="preference-tag">🏞️ 自然风光</a-checkbox>
-                    <a-checkbox value="美食" class="preference-tag">🍜 美食</a-checkbox>
-                    <a-checkbox value="购物" class="preference-tag">🛍️ 购物</a-checkbox>
-                    <a-checkbox value="艺术" class="preference-tag">🎨 艺术</a-checkbox>
-                    <a-checkbox value="休闲" class="preference-tag">☕ 休闲</a-checkbox>
+                    <a-checkbox value="历史文化" class="preference-tag">历史文化</a-checkbox>
+                    <a-checkbox value="自然风光" class="preference-tag">自然风光</a-checkbox>
+                    <a-checkbox value="美食" class="preference-tag">特色美食</a-checkbox>
+                    <a-checkbox value="购物" class="preference-tag">高端购物</a-checkbox>
+                    <a-checkbox value="艺术" class="preference-tag">艺术看展</a-checkbox>
+                    <a-checkbox value="休闲" class="preference-tag">沉浸休闲</a-checkbox>
                   </a-checkbox-group>
                 </div>
               </a-form-item>
@@ -146,14 +155,14 @@
         <!-- 第三步:额外要求 -->
         <div class="form-section">
           <div class="section-header">
-            <span class="section-icon">💬</span>
-            <span class="section-title">额外要求</span>
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span class="section-title">特殊要求</span>
           </div>
 
           <a-form-item name="free_text_input">
             <a-textarea
               v-model:value="formData.free_text_input"
-              placeholder="请输入您的额外要求,例如:想去看升旗、需要无障碍设施、对海鲜过敏等..."
+              placeholder="请输入您的任何额外需求，例如：需要无障碍设施、对海鲜过敏、必须安排米其林餐厅等..."
               :rows="3"
               size="large"
               class="custom-textarea"
@@ -172,11 +181,11 @@
             class="submit-button"
           >
             <template v-if="!loading">
-              <span class="button-icon">🚀</span>
-              <span>开始规划我的旅行</span>
+              <span>开启定制之旅</span>
+              <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
             </template>
             <template v-else>
-              <span>正在生成中...</span>
+              <span>规划引擎运转中...</span>
             </template>
           </a-button>
         </a-form-item>
@@ -188,10 +197,11 @@
               :percent="loadingProgress"
               status="active"
               :stroke-color="{
-                '0%': '#667eea',
-                '100%': '#764ba2',
+                '0%': '#0EA5E9',
+                '100%': '#38BDF8',
               }"
-              :stroke-width="10"
+              :stroke-width="8"
+              class="custom-progress"
             />
             <p class="loading-status">
               {{ loadingStatus }}
@@ -216,7 +226,7 @@ const loading = ref(false)
 const loadingProgress = ref(0)
 const loadingStatus = ref('')
 
-const formData = reactive<TripFormData & { start_date: Dayjs | null; end_date: Dayjs | null }>({
+const formData = reactive<Omit<TripFormData, 'start_date' | 'end_date'> & { start_date: Dayjs | null; end_date: Dayjs | null }>({
   city: '',
   start_date: null,
   end_date: null,
@@ -251,7 +261,7 @@ const handleSubmit = async () => {
 
   loading.value = true
   loadingProgress.value = 0
-  loadingStatus.value = '正在初始化...'
+  loadingStatus.value = '正在初始化专属向导...'
 
   // 模拟进度更新
   const progressInterval = setInterval(() => {
@@ -260,13 +270,13 @@ const handleSubmit = async () => {
 
       // 更新状态文本
       if (loadingProgress.value <= 30) {
-        loadingStatus.value = '🔍 正在搜索景点...'
+        loadingStatus.value = '正在全网检索高端景点与秘境...'
       } else if (loadingProgress.value <= 50) {
-        loadingStatus.value = '🌤️ 正在查询天气...'
+        loadingStatus.value = '正在核对气候与最佳出行时段...'
       } else if (loadingProgress.value <= 70) {
-        loadingStatus.value = '🏨 正在推荐酒店...'
+        loadingStatus.value = '正在筛选符合偏好的顶奢与特色住宿...'
       } else {
-        loadingStatus.value = '📋 正在生成行程计划...'
+        loadingStatus.value = 'AI 核心运算中：编织您的专属行程...'
       }
     }
   }, 500)
@@ -287,7 +297,7 @@ const handleSubmit = async () => {
 
     clearInterval(progressInterval)
     loadingProgress.value = 100
-    loadingStatus.value = '✅ 完成!'
+    loadingStatus.value = '规划完成！'
 
     if (response.success && response.data) {
       // 保存到sessionStorage
@@ -318,13 +328,14 @@ const handleSubmit = async () => {
 <style scoped>
 .home-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #F0F9FF; /* Liquid Glass base bg */
+  font-family: 'Jost', sans-serif;
   padding: 60px 20px;
   position: relative;
   overflow: hidden;
 }
 
-/* 背景装饰 */
+/* 动态流体背景特效 */
 .bg-decoration {
   position: absolute;
   top: 0;
@@ -333,317 +344,345 @@ const handleSubmit = async () => {
   height: 100%;
   pointer-events: none;
   overflow: hidden;
+  z-index: 0;
 }
 
 .circle {
   position: absolute;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  animation: float 20s infinite ease-in-out;
+  filter: blur(80px);
+  animation: liquidFloat 20s infinite alternate ease-in-out;
 }
 
 .circle-1 {
-  width: 300px;
-  height: 300px;
-  top: -100px;
+  width: 600px;
+  height: 600px;
+  top: -200px;
   left: -100px;
+  background: rgba(14, 165, 233, 0.15); /* #0EA5E9 primary */
   animation-delay: 0s;
 }
 
 .circle-2 {
-  width: 200px;
-  height: 200px;
-  top: 50%;
-  right: -50px;
-  animation-delay: 5s;
+  width: 500px;
+  height: 500px;
+  top: 30%;
+  right: -150px;
+  background: rgba(56, 189, 248, 0.12); /* #38BDF8 secondary */
+  animation-delay: -5s;
 }
 
 .circle-3 {
-  width: 150px;
-  height: 150px;
-  bottom: -50px;
-  left: 30%;
-  animation-delay: 10s;
+  width: 400px;
+  height: 400px;
+  bottom: -100px;
+  left: 20%;
+  background: rgba(249, 115, 22, 0.08); /* #F97316 orange accent */
+  animation-delay: -10s;
 }
 
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-30px) rotate(180deg);
-  }
+@keyframes liquidFloat {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(30px, -50px) scale(1.1) rotate(10deg); }
+  66% { transform: translate(-20px, 20px) scale(0.9) rotate(-5deg); }
+  100% { transform: translate(0, 0) scale(1) rotate(0deg); }
 }
 
 /* 页面标题 */
 .page-header {
   text-align: center;
   margin-bottom: 50px;
-  animation: fadeInDown 0.8s ease-out;
+  animation: fadeInDown 1s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   z-index: 1;
 }
 
 .icon-wrapper {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
-.icon {
-  font-size: 80px;
+.animated-plane {
+  width: 80px;
+  height: 80px;
   display: inline-block;
-  animation: bounce 2s infinite;
+  animation: flyAround 10s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 12px 20px rgba(14, 165, 233, 0.3));
 }
 
-@keyframes bounce {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-20px);
-  }
+@keyframes flyAround {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(15px, -10px) rotate(4deg); }
+  50% { transform: translate(0, -20px) rotate(0deg); }
+  75% { transform: translate(-15px, -10px) rotate(-4deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
 }
 
 .page-title {
+  font-family: 'Bodoni Moda', serif;
   font-size: 56px;
-  font-weight: 800;
-  color: #ffffff;
+  font-weight: 600;
+  color: #0C4A6E; /* Deep navy blue */
   margin-bottom: 16px;
-  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
-  letter-spacing: 2px;
+  letter-spacing: -0.5px;
 }
 
 .page-subtitle {
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.95);
+  font-size: 18px;
+  color: #475569;
   margin: 0;
   font-weight: 300;
+  letter-spacing: 1px;
 }
 
-/* 表单卡片 */
+/* 表单卡片 (Liquid Glass) */
 .form-card {
-  max-width: 1400px;
+  max-width: 1100px;
   margin: 0 auto;
   border-radius: 24px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
-  animation: fadeInUp 0.8s ease-out;
+  box-shadow: 0 25px 50px -12px rgba(12, 74, 110, 0.1);
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   z-index: 1;
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.98) !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
 /* 表单分区 */
 .form-section {
   margin-bottom: 32px;
-  padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
+  padding: 32px;
+  background: rgba(255, 255, 255, 0.4);
   border-radius: 16px;
-  border: 1px solid #e8e8e8;
-  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .form-section:hover {
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+  box-shadow: 0 10px 30px rgba(14, 165, 233, 0.05);
   transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.9);
 }
 
 .section-header {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #667eea;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(14, 165, 233, 0.15);
 }
 
 .section-icon {
-  font-size: 24px;
+  width: 24px;
+  height: 24px;
   margin-right: 12px;
+  color: #0EA5E9;
 }
 
 .section-title {
-  font-size: 18px;
+  font-family: 'Bodoni Moda', serif;
+  font-size: 20px;
   font-weight: 600;
-  color: #333;
+  color: #0C4A6E;
 }
 
 /* 表单标签 */
 .form-label {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
-  color: #555;
+  color: #334155;
 }
 
 /* 自定义输入框 */
 .custom-input :deep(.ant-input),
 .custom-input :deep(.ant-picker) {
   border-radius: 12px;
-  border: 2px solid #e8e8e8;
-  transition: all 0.3s ease;
+  border: 1px solid #E2E8F0;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .custom-input :deep(.ant-input:hover),
 .custom-input :deep(.ant-picker:hover) {
-  border-color: #667eea;
+  border-color: #38BDF8;
 }
 
 .custom-input :deep(.ant-input:focus),
 .custom-input :deep(.ant-picker-focused) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #0EA5E9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+  background: #ffffff;
 }
 
 /* 自定义选择框 */
 .custom-select :deep(.ant-select-selector) {
   border-radius: 12px !important;
-  border: 2px solid #e8e8e8 !important;
+  border: 1px solid #E2E8F0 !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
   transition: all 0.3s ease;
 }
 
 .custom-select:hover :deep(.ant-select-selector) {
-  border-color: #667eea !important;
+  border-color: #38BDF8 !important;
 }
 
 .custom-select :deep(.ant-select-focused .ant-select-selector) {
-  border-color: #667eea !important;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+  border-color: #0EA5E9 !important;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15) !important;
+  background: #ffffff !important;
 }
 
-/* 天数显示 - 紧凑版 */
+/* 天数显示 */
 .days-display-compact {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 40px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #E0F2FE;
+  border: 1px solid #BAE6FD;
   border-radius: 12px;
-  color: white;
+  color: #0C4A6E;
+  font-weight: 600;
 }
 
 .days-display-compact .days-value {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 20px;
   margin-right: 4px;
-}
-
-.days-display-compact .days-unit {
-  font-size: 14px;
 }
 
 /* 偏好标签 */
 .preference-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
 }
 
 .custom-checkbox-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
 }
 
 .preference-tag :deep(.ant-checkbox-wrapper) {
   margin: 0 !important;
-  padding: 8px 16px;
-  border: 2px solid #e8e8e8;
-  border-radius: 20px;
-  transition: all 0.3s ease;
-  background: white;
+  padding: 8px 20px;
+  border: 1px solid #E2E8F0;
+  border-radius: 30px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(255, 255, 255, 0.6);
   font-size: 14px;
+  color: #475569;
 }
 
 .preference-tag :deep(.ant-checkbox-wrapper:hover) {
-  border-color: #667eea;
-  background: #f5f7ff;
+  border-color: #38BDF8;
+  background: rgba(255, 255, 255, 0.9);
+  color: #0C4A6E;
 }
 
 .preference-tag :deep(.ant-checkbox-wrapper-checked) {
-  border-color: #667eea;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #0EA5E9;
+  background: #0EA5E9;
   color: white;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
-/* 自定义文本域 */
+.preference-tag :deep(.ant-checkbox-inner) {
+  display: none; /* Hide default checkbox icon for pill style */
+}
+
+/* 文本域 */
 .custom-textarea :deep(.ant-input) {
-  border-radius: 12px;
-  border: 2px solid #e8e8e8;
+  border-radius: 16px;
+  border: 1px solid #E2E8F0;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 16px;
   transition: all 0.3s ease;
 }
 
 .custom-textarea :deep(.ant-input:hover) {
-  border-color: #667eea;
+  border-color: #38BDF8;
 }
 
 .custom-textarea :deep(.ant-input:focus) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #0EA5E9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+  background: #ffffff;
 }
 
-/* 提交按钮 */
+/* CTA 提交按钮 */
 .submit-button {
-  height: 56px;
-  border-radius: 28px;
+  height: 64px;
+  border-radius: 32px;
   font-size: 18px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-weight: 500;
+  letter-spacing: 1px;
+  background: #F97316; /* CTA Orange */
   border: none;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
-  transition: all 0.3s ease;
+  box-shadow: 0 10px 25px rgba(249, 115, 22, 0.3);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
 .submit-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 15px 35px rgba(249, 115, 22, 0.4);
+  background: #EA580C;
 }
 
 .submit-button:active {
-  transform: translateY(0);
+  transform: translateY(1px);
+  box-shadow: 0 5px 15px rgba(249, 115, 22, 0.3);
 }
 
 .button-icon {
-  margin-right: 8px;
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  transition: transform 0.3s ease;
 }
 
-/* 加载容器 */
+.submit-button:hover .button-icon {
+  transform: translateX(4px);
+}
+
+/* 加载状态 */
 .loading-container {
   text-align: center;
-  padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
+  padding: 32px;
+  background: rgba(255, 255, 255, 0.6);
   border-radius: 16px;
-  border: 2px dashed #667eea;
+  border: 1px dashed #BAE6FD;
 }
 
 .loading-status {
   margin-top: 16px;
-  color: #667eea;
-  font-size: 18px;
+  color: #0EA5E9;
+  font-size: 16px;
   font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* 进度条定制 */
+.custom-progress :deep(.ant-progress-bg) {
+  border-radius: 8px;
 }
 
 /* 动画 */
 @keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-40px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
-
