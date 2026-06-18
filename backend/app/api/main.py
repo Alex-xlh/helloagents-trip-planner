@@ -2,39 +2,17 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from ..config import get_settings, validate_config, print_config
 from .routes import trip, poi, map as map_routes
 
 # 获取配置
 settings = get_settings()
 
-# 创建FastAPI应用
-app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
-    description="基于HelloAgents框架的智能旅行规划助手API",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
-# 配置CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.get_cors_origins_list(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# 注册路由
-app.include_router(trip.router, prefix="/api")
-app.include_router(poi.router, prefix="/api")
-app.include_router(map_routes.router, prefix="/api")
-
-
-@app.on_event("startup")
-async def startup_event():
-    """应用启动事件"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理器"""
+    # === 启动时执行的逻辑 (Startup) ===
     print("\n" + "="*60)
     print(f"🚀 {settings.app_name} v{settings.app_version}")
     print("="*60)
@@ -55,15 +33,41 @@ async def startup_event():
     print("📚 API文档: http://localhost:8000/docs")
     print("📖 ReDoc文档: http://localhost:8000/redoc")
     print("="*60 + "\n")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """应用关闭事件"""
+    
+    yield # 让应用开始处理请求
+    
+    # === 关闭时执行的逻辑 (Shutdown) ===
     print("\n" + "="*60)
     print("👋 应用正在关闭...")
     print("="*60 + "\n")
 
+# 创建FastAPI应用
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    description="基于langchain框架的智能旅行规划助手API",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
+
+# 配置CORS
+app.add_middleware(
+    CORSMiddleware,
+    #白名单
+    allow_origins=settings.get_cors_origins_list(),
+    #允许携带cookie
+    allow_credentials=True,
+    #允许的方法，所有
+    allow_methods=["*"],
+    #允许的请求头，所有
+    allow_headers=["*"],
+)
+
+# 注册路由
+app.include_router(trip.router, prefix="/api")
+app.include_router(poi.router, prefix="/api")
+app.include_router(map_routes.router, prefix="/api")
 
 @app.get("/")
 async def root():
@@ -76,7 +80,6 @@ async def root():
         "redoc": "/redoc"
     }
 
-
 @app.get("/health")
 async def health():
     """健康检查"""
@@ -85,7 +88,6 @@ async def health():
         "service": settings.app_name,
         "version": settings.app_version
     }
-
 
 if __name__ == "__main__":
     import uvicorn
@@ -96,4 +98,3 @@ if __name__ == "__main__":
         port=settings.port,
         reload=True
     )
-

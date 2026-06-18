@@ -20,10 +20,10 @@ def get_llm() -> ChatOpenAI:
     if _llm_instance is None:
         settings = get_settings()
         
-        # 兼容原来的环境变量读取
-        llm_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or settings.openai_api_key
-        llm_base_url = os.getenv("LLM_BASE_URL") or settings.openai_base_url
-        llm_model = os.getenv("LLM_MODEL_ID") or settings.openai_model
+        # 直接从环境变量读取
+        llm_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        llm_base_url = os.getenv("LLM_BASE_URL")
+        llm_model = os.getenv("LLM_MODEL_ID")
         
         if not llm_api_key:
             print("⚠️ 未配置 API KEY, LLM 可能会调用失败")
