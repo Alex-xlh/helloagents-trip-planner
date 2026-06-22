@@ -98,7 +98,9 @@ class MultiAgentTripPlanner:
 
             # 步骤1: 搜索景点
             import concurrent.futures
-
+            # todo 完成其余reference的调用
+            
+            #多线程并发
             keywords = request.preferences[0] if request.preferences else "景点"
             attraction_query = f"请搜索{request.city}的{keywords}相关景点"
             weather_query = f"请查询{request.city}的天气信息"

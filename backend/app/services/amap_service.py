@@ -9,7 +9,7 @@ from ..models.schemas import Location, POIInfo, WeatherInfo
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.session import ClientSession
 
-# 缓存MCP客户端上下文  可以长久开启后期可优化
+# TODO 缓存MCP客户端上下文  可以长久开启后期可优化
 _mcp_session_context = None
 
 async def _call_mcp_tool_async(tool_name: str, arguments: dict) -> str:
@@ -18,12 +18,15 @@ async def _call_mcp_tool_async(tool_name: str, arguments: dict) -> str:
     settings = get_settings()
     if not settings.amap_api_key:
         raise ValueError("高德地图API Key未配置,请在.env文件中设置AMAP_API_KEY")
-    #后台新启动一个进程，来跑这个mcp服务
+    # 后台新启动一个进程，来跑这个mcp服务
     # 复制环境变量并更新
+    # 要用标准的api格式，变量名是AMAP_MAPS_API_KEY,否则会报错
     env = os.environ.copy()
     env["AMAP_MAPS_API_KEY"] = settings.amap_api_key
 
+    # 跨平台兼容，windows是uvx.exe,linux是uvx
     command_name = "uvx.exe" if os.name == 'nt' else "uvx"
+    # 定义了如何启动高德 服务器：用 uvx 运行 amap-mcp-server 包
     server_params = StdioServerParameters(
         command=command_name,
         args=["amap-mcp-server"],
@@ -31,8 +34,12 @@ async def _call_mcp_tool_async(tool_name: str, arguments: dict) -> str:
     )
     
     # 由于这是一个独立的短连接调用，直接创建session并在结束时关闭
+    # read是读取管道 连接着服务端的stdout 
+    # write是写入管道 连接着服务端的stdin
     async with stdio_client(server_params) as (read, write):
+        #创建了一个mcp专用的聊天室
         async with ClientSession(read, write) as session:
+            # 进行mcp协议的握手（初始化）。这一步会交换彼此的元数据（比如支持什么能力、名称等）
             await session.initialize()
             result = await session.call_tool(tool_name, arguments=arguments)
             if result.content:
@@ -256,6 +263,25 @@ class AmapService:
             if city: arguments["city"] = city
             result = call_mcp_tool_sync("maps_geo", arguments)
             print(f"地理编码结果: {result[:200]}...")
+            
+            import json
+            import re
+            
+            json_match = re.search(r'\{.*\}', result, re.DOTALL)
+            if json_match:
+                try:
+                    data = json.loads(json_match.group())
+                    geocodes = data.get("geocodes", [])
+                    
+                    if geocodes and len(geocodes) > 0:
+                        loc_str = str(geocodes[0].get("location", ""))
+                        if loc_str and "," in loc_str:
+                            lng, lat = loc_str.split(",", 1)
+                            return Location(longitude=float(lng), latitude=float(lat))
+                            
+                except Exception as parse_e:
+                    print(f"⚠️ 地理编码JSON解析失败: {parse_e}")
+                    
             return None
         except Exception as e:
             print(f"❌ 地理编码失败: {str(e)}")
