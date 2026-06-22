@@ -568,7 +568,7 @@ const handleSubmit = async () => {
   width: 100%;
 }
 
-.preference-tag :deep(.ant-checkbox-wrapper) {
+.custom-checkbox-group :deep(.ant-checkbox-wrapper) {
   margin: 0 !important;
   padding: 8px 20px;
   border: 1px solid #E2E8F0;
@@ -579,20 +579,20 @@ const handleSubmit = async () => {
   color: #475569;
 }
 
-.preference-tag :deep(.ant-checkbox-wrapper:hover) {
+.custom-checkbox-group :deep(.ant-checkbox-wrapper:hover) {
   border-color: #38BDF8;
   background: rgba(255, 255, 255, 0.9);
   color: #0C4A6E;
 }
 
-.preference-tag :deep(.ant-checkbox-wrapper-checked) {
+.custom-checkbox-group :deep(.ant-checkbox-wrapper-checked) {
   border-color: #0EA5E9;
   background: #0EA5E9;
   color: white;
   box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
-.preference-tag :deep(.ant-checkbox-inner) {
+.custom-checkbox-group :deep(.ant-checkbox-inner) {
   display: none; /* Hide default checkbox icon for pill style */
 }
 

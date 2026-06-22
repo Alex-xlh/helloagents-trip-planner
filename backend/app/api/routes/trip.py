@@ -41,7 +41,7 @@ async def plan_trip(request: TripRequest):
 
         # 生成旅行计划
         print("🚀 开始生成旅行计划...")
-        trip_plan = agent.plan_trip(request)
+        trip_plan = await agent.plan_trip(request)
 
         print("✅ 旅行计划生成成功,准备返回响应\n")
 
@@ -75,8 +75,8 @@ async def health_check():
         return {
             "status": "healthy",
             "service": "trip-planner",
-            "agent_name": agent.agent.name,
-            "tools_count": len(agent.agent.list_tools())
+            "agent_name": "MultiAgentTripPlanner",
+            "tools_count": 3
         }
     except Exception as e:
         raise HTTPException(

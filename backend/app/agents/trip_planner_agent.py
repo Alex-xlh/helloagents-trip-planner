@@ -1,6 +1,7 @@
 """多智能体旅行规划系统 (基于 LangChain / LangGraph)"""
 
 import json
+import asyncio
 from typing import Dict, Any, List
 from langgraph.prebuilt import create_react_agent
 from langchain_core.prompts import ChatPromptTemplate
@@ -85,7 +86,7 @@ class MultiAgentTripPlanner:
             traceback.print_exc()
             raise
     
-    def plan_trip(self, request: TripRequest) -> TripPlan:
+    async def plan_trip(self, request: TripRequest) -> TripPlan:
         """使用多智能体协作生成旅行计划"""
         try:
             print(f"\n{'='*60}")
@@ -97,39 +98,35 @@ class MultiAgentTripPlanner:
             print(f"{'='*60}\n")
 
             # 步骤1: 搜索景点
-            import concurrent.futures
             # todo 完成其余reference的调用
             
-            #多线程并发
+            #原生协程并发
             keywords = request.preferences[0] if request.preferences else "景点"
             attraction_query = f"请搜索{request.city}的{keywords}相关景点"
             weather_query = f"请查询{request.city}的天气信息"
             hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
 
-            def fetch_attractions():
+            async def fetch_attractions():
                 print("📍 步骤1: 正在并发搜索景点...")
-                res = self.attraction_agent.invoke({"messages": [("human", attraction_query)]})
+                res = await self.attraction_agent.ainvoke({"messages": [("human", attraction_query)]})
                 return res["messages"][-1].content
 
-            def fetch_weather():
+            async def fetch_weather():
                 print("🌤️  步骤2: 正在并发查询天气...")
-                res = self.weather_agent.invoke({"messages": [("human", weather_query)]})
+                res = await self.weather_agent.ainvoke({"messages": [("human", weather_query)]})
                 return res["messages"][-1].content
 
-            def fetch_hotels():
+            async def fetch_hotels():
                 print("🏨 步骤3: 正在并发搜索酒店...")
-                res = self.hotel_agent.invoke({"messages": [("human", hotel_query)]})
+                res = await self.hotel_agent.ainvoke({"messages": [("human", hotel_query)]})
                 return res["messages"][-1].content
 
-            print("🔄 正在多线程并发执行前置三大智能体(景点/天气/酒店)...")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                future_attractions = executor.submit(fetch_attractions)
-                future_weather = executor.submit(fetch_weather)
-                future_hotels = executor.submit(fetch_hotels)
-
-                attraction_response = future_attractions.result()
-                weather_response = future_weather.result()
-                hotel_response = future_hotels.result()
+            print("🔄 正在使用 asyncio.gather 并发执行前置三大智能体(景点/天气/酒店)...")
+            attraction_response, weather_response, hotel_response = await asyncio.gather(
+                fetch_attractions(),
+                fetch_weather(),
+                fetch_hotels()
+            )
 
             print(f"景点搜索结果: {attraction_response[:100]}...\n")
             print(f"天气查询结果: {weather_response[:100]}...\n")
@@ -145,7 +142,7 @@ class MultiAgentTripPlanner:
             prefs = ', '.join(request.preferences) if request.preferences else '无'
             
             planner_chain = prompt_planner | self.llm | parser
-            trip_plan = planner_chain.invoke({
+            trip_plan = await planner_chain.ainvoke({
                 "city": request.city,
                 "start_date": request.start_date,
                 "end_date": request.end_date,

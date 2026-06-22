@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from ..config import get_settings, validate_config, print_config
 from .routes import trip, poi, map as map_routes
+from ..services.amap_service import init_mcp_client, close_mcp_client
 
 # 获取配置
 settings = get_settings()
@@ -34,12 +35,24 @@ async def lifespan(app: FastAPI):
     print("📖 ReDoc文档: http://localhost:8000/redoc")
     print("="*60 + "\n")
     
+    # 初始化全局MCP长连接池
+    try:
+        await init_mcp_client()
+    except Exception as e:
+        print(f"⚠️ MCP长连接池初始化失败，将降级为请求时初始化: {e}")
+    
     yield # 让应用开始处理请求
     
     # === 关闭时执行的逻辑 (Shutdown) ===
     print("\n" + "="*60)
     print("👋 应用正在关闭...")
     print("="*60 + "\n")
+    
+    # 释放全局MCP长连接资源
+    try:
+        await close_mcp_client()
+    except Exception as e:
+        print(f"⚠️ 释放MCP长连接资源失败: {e}")
 
 # 创建FastAPI应用
 app = FastAPI(
