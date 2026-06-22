@@ -1,9 +1,9 @@
 """旅行规划API路由"""
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from ...models.schemas import (
     TripRequest,
-    TripPlanResponse,
     ErrorResponse
 )
 from ...agents.trip_planner_agent import get_trip_planner_agent
@@ -11,53 +11,39 @@ from ...agents.trip_planner_agent import get_trip_planner_agent
 router = APIRouter(prefix="/trip", tags=["旅行规划"])
 
 
+
+
 @router.post(
-    "/plan",
-    response_model=TripPlanResponse,
-    summary="生成旅行计划",
-    description="根据用户输入的旅行需求,生成详细的旅行计划"
+    "/plan/stream",
+    summary="流式生成旅行计划",
+    description="流式返回打字机效果文字及最终JSON"
 )
-async def plan_trip(request: TripRequest):
+async def plan_trip_stream_route(request: TripRequest):
     """
-    生成旅行计划
-
-    Args:
-        request: 旅行请求参数
-
-    Returns:
-        旅行计划响应
+    流式生成旅行计划 (Server-Sent Events / 文本流)
     """
     try:
         print(f"\n{'='*60}")
-        print(f"📥 收到旅行规划请求:")
+        print(f"📥 收到流式旅行规划请求:")
         print(f"   城市: {request.city}")
-        print(f"   日期: {request.start_date} - {request.end_date}")
-        print(f"   天数: {request.travel_days}")
         print(f"{'='*60}\n")
 
-        # 获取Agent实例
-        print("🔄 获取多智能体系统实例...")
         agent = get_trip_planner_agent()
-
-        # 生成旅行计划
-        print("🚀 开始生成旅行计划...")
-        trip_plan = await agent.plan_trip(request)
-
-        print("✅ 旅行计划生成成功,准备返回响应\n")
-
-        return TripPlanResponse(
-            success=True,
-            message="旅行计划生成成功",
-            data=trip_plan
-        )
+        
+        async def text_generator():
+            try:
+                async for chunk in agent.plan_trip_stream(request):
+                    yield chunk
+            except Exception as e:
+                yield f"\n\n[服务器错误]: {str(e)}"
+                
+        # 返回原生文本流
+        return StreamingResponse(text_generator(), media_type="text/plain; charset=utf-8")
 
     except Exception as e:
-        print(f"❌ 生成旅行计划失败: {str(e)}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(
             status_code=500,
-            detail=f"生成旅行计划失败: {str(e)}"
+            detail=f"流式生成旅行计划失败: {str(e)}"
         )
 
 

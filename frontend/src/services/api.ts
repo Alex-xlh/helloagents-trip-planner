@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { TripFormData, TripPlanResponse } from '@/types'
+import type { TripFormData } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -35,16 +35,46 @@ apiClient.interceptors.response.use(
   }
 )
 
+
+
 /**
- * 生成旅行计划
+ * 流式生成旅行计划
  */
-export async function generateTripPlan(formData: TripFormData): Promise<TripPlanResponse> {
+export async function generateTripPlanStream(
+  formData: TripFormData,
+  onChunk: (text: string) => void
+): Promise<void> {
   try {
-    const response = await apiClient.post<TripPlanResponse>('/api/trip/plan', formData)
-    return response.data
+    const baseUrlStr = import.meta.env.VITE_API_BASE_URL ? API_BASE_URL : ''
+    const url = `${baseUrlStr}/api/trip/plan/stream`
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(formData)
+    })
+
+    if (!response.ok) {
+      throw new Error(`请求失败: ${response.status}`)
+    }
+
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('流式响应读取失败')
+
+    const decoder = new TextDecoder('utf-8')
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+      const chunkText = decoder.decode(value, { stream: true })
+      onChunk(chunkText)
+    }
   } catch (error: any) {
-    console.error('生成旅行计划失败:', error)
-    throw new Error(error.response?.data?.detail || error.message || '生成旅行计划失败')
+    console.error('流式生成旅行计划失败:', error)
+    throw error
   }
 }
 

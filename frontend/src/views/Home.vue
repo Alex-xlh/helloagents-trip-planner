@@ -190,22 +190,16 @@
           </a-button>
         </a-form-item>
 
-        <!-- 加载进度条 -->
+        <!-- 流式打字机特效区域 -->
         <a-form-item v-if="loading">
-          <div class="loading-container">
-            <a-progress
-              :percent="loadingProgress"
-              status="active"
-              :stroke-color="{
-                '0%': '#0EA5E9',
-                '100%': '#38BDF8',
-              }"
-              :stroke-width="8"
-              class="custom-progress"
-            />
-            <p class="loading-status">
-              {{ loadingStatus }}
-            </p>
+          <div class="streaming-container">
+            <div class="streaming-header">
+              <svg class="loading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="4.93" x2="19.07" y2="7.76"></line></svg>
+              <span class="streaming-title">AI 旅行管家正在为您思考...</span>
+            </div>
+            <div class="streaming-content" ref="streamingBox">
+              {{ streamedText }}<span class="cursor-blink">|</span>
+            </div>
           </div>
         </a-form-item>
       </a-form>
@@ -217,14 +211,14 @@
 import { ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { generateTripPlan } from '@/services/api'
+import { generateTripPlanStream } from '@/services/api'
 import type { TripFormData } from '@/types'
 import type { Dayjs } from 'dayjs'
 
 const router = useRouter()
 const loading = ref(false)
-const loadingProgress = ref(0)
-const loadingStatus = ref('')
+const streamedText = ref('')
+const streamingBox = ref<HTMLElement | null>(null)
 
 const formData = reactive<Omit<TripFormData, 'start_date' | 'end_date'> & { start_date: Dayjs | null; end_date: Dayjs | null }>({
   city: '',
@@ -260,26 +254,7 @@ const handleSubmit = async () => {
   }
 
   loading.value = true
-  loadingProgress.value = 0
-  loadingStatus.value = '正在初始化专属向导...'
-
-  // 模拟进度更新
-  const progressInterval = setInterval(() => {
-    if (loadingProgress.value < 90) {
-      loadingProgress.value += 10
-
-      // 更新状态文本
-      if (loadingProgress.value <= 30) {
-        loadingStatus.value = '正在全网检索高端景点与秘境...'
-      } else if (loadingProgress.value <= 50) {
-        loadingStatus.value = '正在核对气候与最佳出行时段...'
-      } else if (loadingProgress.value <= 70) {
-        loadingStatus.value = '正在筛选符合偏好的顶奢与特色住宿...'
-      } else {
-        loadingStatus.value = 'AI 核心运算中：编织您的专属行程...'
-      }
-    }
-  }, 500)
+  streamedText.value = ''
 
   try {
     const requestData: TripFormData = {
@@ -293,33 +268,55 @@ const handleSubmit = async () => {
       free_text_input: formData.free_text_input
     }
 
-    const response = await generateTripPlan(requestData)
+    let fullResponseText = ''
+    
+    await generateTripPlanStream(requestData, (chunk) => {
+      fullResponseText += chunk
+      
+      // 我们只把不包含 ```json 的部分显示给用户（过滤掉丑陋的代码块）
+      const jsonStartIndex = fullResponseText.indexOf('```json')
+      if (jsonStartIndex === -1) {
+        streamedText.value = fullResponseText
+      } else {
+        streamedText.value = fullResponseText.substring(0, jsonStartIndex)
+      }
+      
+      // 自动滚动到底部
+      if (streamingBox.value) {
+        streamingBox.value.scrollTop = streamingBox.value.scrollHeight
+      }
+    })
 
-    clearInterval(progressInterval)
-    loadingProgress.value = 100
-    loadingStatus.value = '规划完成！'
-
-    if (response.success && response.data) {
-      // 保存到sessionStorage
-      sessionStorage.setItem('tripPlan', JSON.stringify(response.data))
-
-      message.success('旅行计划生成成功!')
-
-      // 短暂延迟后跳转
-      setTimeout(() => {
-        router.push('/result')
-      }, 500)
+    // 流结束，解析 JSON
+    const jsonMatch = fullResponseText.match(/```json\s*([\s\S]*?)\s*```/)
+    let tripPlanData = null
+    
+    if (jsonMatch && jsonMatch[1]) {
+      tripPlanData = JSON.parse(jsonMatch[1])
     } else {
-      message.error(response.message || '生成失败')
+      // 兜底处理：如果没有找到代码块，可能大模型直接输出了 JSON，或者出错
+      try {
+        tripPlanData = JSON.parse(fullResponseText)
+      } catch (e) {
+        console.error('JSON提取失败, 原始响应:', fullResponseText)
+        throw new Error('大模型返回的数据格式不正确，解析失败')
+      }
     }
+
+    sessionStorage.setItem('tripPlan', JSON.stringify(tripPlanData))
+    message.success('旅行计划生成成功!')
+    
+    setTimeout(() => {
+      router.push('/result')
+    }, 500)
+
   } catch (error: any) {
-    clearInterval(progressInterval)
     message.error(error.message || '生成旅行计划失败,请稍后重试')
+    console.error(error)
   } finally {
     setTimeout(() => {
       loading.value = false
-      loadingProgress.value = 0
-      loadingStatus.value = ''
+      streamedText.value = ''
     }, 1000)
   }
 }
@@ -673,6 +670,77 @@ const handleSubmit = async () => {
 /* 进度条定制 */
 .custom-progress :deep(.ant-progress-bg) {
   border-radius: 8px;
+}
+
+/* 流式打字机特效区域 */
+.streaming-container {
+  background: rgba(15, 23, 42, 0.85); /* 深邃质感背景 */
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 24px;
+  margin-top: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), 0 0 20px rgba(14, 165, 233, 0.1) inset;
+}
+
+.streaming-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.loading-icon {
+  width: 20px;
+  height: 20px;
+  color: #38BDF8;
+  margin-right: 12px;
+  animation: spin 2s linear infinite;
+}
+
+.streaming-title {
+  color: #E0F2FE;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+
+.streaming-content {
+  color: #F8FAFC;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 15px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  min-height: 100px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.streaming-content::-webkit-scrollbar {
+  width: 6px;
+}
+.streaming-content::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.5);
+  border-radius: 3px;
+}
+
+.cursor-blink {
+  display: inline-block;
+  width: 8px;
+  color: #38BDF8;
+  font-weight: bold;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 /* 动画 */

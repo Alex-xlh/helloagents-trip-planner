@@ -27,7 +27,7 @@ HOTEL_AGENT_PROMPT = """你是酒店推荐专家。你的任务是根据城市�
 请使用 `amap_maps_text_search` 工具搜索酒店(关键词使用"酒店"或"宾馆")。必须返回搜索结果的具体信息，不要自己编造。
 """
 
-PLANNER_AGENT_PROMPT = """你是行程规划专家。你的任务是根据给定的景点、天气和酒店信息，生成详细的旅行计划。
+PLANNER_AGENT_PROMPT = """你是高端旅行规划专家。你的任务是根据给定的景点、天气和酒店信息，生成极具吸引力的定制旅行计划。
 
 **基本信息:**
 - 城市: {city}
@@ -56,6 +56,10 @@ PLANNER_AGENT_PROMPT = """你是行程规划专家。你的任务是根据给定
 6. **必须包含预算信息**(门票、餐饮、住宿及总预算)
 """
 
+GREETING_AGENT_PROMPT = """你是专属旅行预热管家。当用户准备前往 {city} 时，你需要写一段 150 字左右的开场白，热情介绍该城市的特色风土人情，并明确告诉用户“我正在后台为您极速调取高德地图和天气数据，并为您精心编织行程，请稍候...”。语气要非常高端、优雅、亲切。直接使用纯文本或 Markdown 输出，不需要任何真实的数据。"""
+
+
+
 
 class MultiAgentTripPlanner:
     """多智能体旅行规划系统 (LangChain)"""
@@ -76,6 +80,8 @@ class MultiAgentTripPlanner:
             # 3. 酒店推荐 Agent
             self.hotel_agent = create_react_agent(self.llm, tools=[amap_maps_text_search], prompt=HOTEL_AGENT_PROMPT)
 
+            # 4. 预热管家 Greeting Agent (直接 Chain)
+            self.greeting_chain = ChatPromptTemplate.from_template(GREETING_AGENT_PROMPT) | self.llm
 
 
             print(f"✅ 多智能体系统初始化成功 (LangChain)")
@@ -86,88 +92,88 @@ class MultiAgentTripPlanner:
             traceback.print_exc()
             raise
     
-    async def plan_trip(self, request: TripRequest) -> TripPlan:
-        """使用多智能体协作生成旅行计划"""
+
+
+    async def plan_trip_stream(self, request: TripRequest):
+        """流式生成旅行计划(双轨并发: 预热打字机 + 后台调高德核心引擎)"""
         try:
             print(f"\n{'='*60}")
-            print(f"🚀 开始多智能体协作规划旅行(LangChain)...")
+            print(f"🚀 开始多智能体协作流式规划旅行(双轨并发)...")
             print(f"目的地: {request.city}")
-            print(f"日期: {request.start_date} 至 {request.end_date}")
             print(f"天数: {request.travel_days}天")
-            print(f"偏好: {', '.join(request.preferences) if request.preferences else '无'}")
             print(f"{'='*60}\n")
 
-            # 步骤1: 搜索景点
-            # todo 完成其余reference的调用
+            # === 定义后台计算任务 ===
+            async def fetch_and_plan():
+                keywords = request.preferences[0] if request.preferences else "景点"
+                attraction_query = f"请搜索{request.city}的{keywords}相关景点"
+                weather_query = f"请查询{request.city}的天气信息"
+                hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
+
+                async def fetch_attractions():
+                    res = await self.attraction_agent.ainvoke({"messages": [("human", attraction_query)]})
+                    return res["messages"][-1].content
+
+                async def fetch_weather():
+                    res = await self.weather_agent.ainvoke({"messages": [("human", weather_query)]})
+                    return res["messages"][-1].content
+
+                async def fetch_hotels():
+                    res = await self.hotel_agent.ainvoke({"messages": [("human", hotel_query)]})
+                    return res["messages"][-1].content
+
+                # 并发收集数据
+                attraction_response, weather_response, hotel_response = await asyncio.gather(
+                    fetch_attractions(),
+                    fetch_weather(),
+                    fetch_hotels()
+                )
+
+                # 核心排版 LLM
+                parser = PydanticOutputParser(pydantic_object=TripPlan)
+                prompt_planner = ChatPromptTemplate.from_template(
+                    PLANNER_AGENT_PROMPT + "\n\n{format_instructions}"
+                )
+                extra_reqs = f"\n**额外要求:** {request.free_text_input}" if request.free_text_input else ""
+                prefs = ', '.join(request.preferences) if request.preferences else '无'
+                
+                planner_chain = prompt_planner | self.llm | parser
+                trip_plan = await planner_chain.ainvoke({
+                    "city": request.city,
+                    "start_date": request.start_date,
+                    "end_date": request.end_date,
+                    "travel_days": request.travel_days,
+                    "transportation": request.transportation,
+                    "accommodation": request.accommodation,
+                    "preferences": prefs,
+                    "extra_reqs": extra_reqs,
+                    "attractions": attraction_response,
+                    "weather": weather_response,
+                    "hotels": hotel_response,
+                    "format_instructions": parser.get_format_instructions()
+                })
+                return trip_plan
+
+            # 🚀 1. 立即启动后台繁重的计算任务 (不 await, 扔到后台去跑)
+            planner_task = asyncio.create_task(fetch_and_plan())
+
+            # 🚀 2. 立即在前台触发 Greeting Agent，直接开始打字机
+            async for chunk in self.greeting_chain.astream({"city": request.city}):
+                if chunk.content:
+                    yield chunk.content
             
-            #原生协程并发
-            keywords = request.preferences[0] if request.preferences else "景点"
-            attraction_query = f"请搜索{request.city}的{keywords}相关景点"
-            weather_query = f"请查询{request.city}的天气信息"
-            hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
-
-            async def fetch_attractions():
-                print("📍 步骤1: 正在并发搜索景点...")
-                res = await self.attraction_agent.ainvoke({"messages": [("human", attraction_query)]})
-                return res["messages"][-1].content
-
-            async def fetch_weather():
-                print("🌤️  步骤2: 正在并发查询天气...")
-                res = await self.weather_agent.ainvoke({"messages": [("human", weather_query)]})
-                return res["messages"][-1].content
-
-            async def fetch_hotels():
-                print("🏨 步骤3: 正在并发搜索酒店...")
-                res = await self.hotel_agent.ainvoke({"messages": [("human", hotel_query)]})
-                return res["messages"][-1].content
-
-            print("🔄 正在使用 asyncio.gather 并发执行前置三大智能体(景点/天气/酒店)...")
-            attraction_response, weather_response, hotel_response = await asyncio.gather(
-                fetch_attractions(),
-                fetch_weather(),
-                fetch_hotels()
-            )
-
-            print(f"景点搜索结果: {attraction_response[:100]}...\n")
-            print(f"天气查询结果: {weather_response[:100]}...\n")
-            print(f"酒店搜索结果: {hotel_response[:100]}...\n")
-
-            # 4. 行程规划 LLM
-            # 不使用 with_structured_output 因为部分模型不支持 response_format
-            parser = PydanticOutputParser(pydantic_object=TripPlan)
-            prompt_planner = ChatPromptTemplate.from_template(
-                PLANNER_AGENT_PROMPT + "\n\n{format_instructions}"
-            )
-            extra_reqs = f"\n**额外要求:** {request.free_text_input}" if request.free_text_input else ""
-            prefs = ', '.join(request.preferences) if request.preferences else '无'
+            # 🚀 3. 打字机打完了，此时静静等待后台任务（其实大部分时候后台已经跑完了，实现了零感知等待）
+            yield "\n\n*(高德数据已就绪，正在生成精美行程单...)*\n\n"
+            trip_plan = await planner_task
             
-            planner_chain = prompt_planner | self.llm | parser
-            trip_plan = await planner_chain.ainvoke({
-                "city": request.city,
-                "start_date": request.start_date,
-                "end_date": request.end_date,
-                "travel_days": request.travel_days,
-                "transportation": request.transportation,
-                "accommodation": request.accommodation,
-                "preferences": prefs,
-                "extra_reqs": extra_reqs,
-                "attractions": attraction_response,
-                "weather": weather_response,
-                "hotels": hotel_response,
-                "format_instructions": parser.get_format_instructions()
-            })
+            # 🚀 4. 将结果包裹成前端需要的 JSON 格式吐出，触发前端跳转
+            yield f"\n\n```json\n{trip_plan.model_dump_json()}\n```\n"
             
-            print(f"{'='*60}")
-            print(f"✅ 旅行计划生成完成!")
-            print(f"{'='*60}\n")
-
-            return trip_plan
-
         except Exception as e:
-            print(f"❌ 生成旅行计划失败: {str(e)}")
+            print(f"❌ 流式生成旅行计划失败: {str(e)}")
             import traceback
             traceback.print_exc()
-            return self._create_fallback_plan(request)
+            yield f"\n\n生成失败: {str(e)}"
     
     def _create_fallback_plan(self, request: TripRequest) -> TripPlan:
         """创建备用计划(当Agent失败时)"""
