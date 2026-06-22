@@ -48,7 +48,7 @@ PLANNER_AGENT_PROMPT = """你是高端旅行规划专家。你的任务是根据
 {hotels}
 
 **要求:**
-1. 每天安排2-3个景点
+1. 每天【严格】安排 2-3 个核心景点（**绝对不可超过 3 个**，留出充足的休息时间！）
 2. 每天必须包含早中晚三餐
 3. 每天推荐一个具体的酒店(从酒店信息中选择)
 4. 考虑景点之间的距离和交通方式
@@ -128,7 +128,7 @@ class MultiAgentTripPlanner:
                     fetch_weather(),
                     fetch_hotels()
                 )
-
+#如果用高级模型可以升级
                 # 核心排版 LLM
                 parser = PydanticOutputParser(pydantic_object=TripPlan)
                 prompt_planner = ChatPromptTemplate.from_template(

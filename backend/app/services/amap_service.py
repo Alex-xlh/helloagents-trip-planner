@@ -351,9 +351,74 @@ from langchain_core.tools import tool
 @tool
 async def amap_maps_text_search(keywords: str, city: str) -> str:
     """根据关键词和城市搜索高德地图上的景点或酒店(POI)。返回相关信息的文本描述。"""
-    return await _call_mcp_tool_async("maps_text_search", {"keywords": keywords, "city": city, "citylimit": "true"})
+    raw_result = await _call_mcp_tool_async("maps_text_search", {"keywords": keywords, "city": city, "citylimit": "true"})
+    
+    import json
+    import re
+    # === 数据瘦身清洗层 ===
+    json_match = re.search(r'\{.*\}', raw_result, re.DOTALL)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            pois = data.get("pois", [])
+            cleaned_pois = []
+            
+            # 扩大截断上限，保留前30条数据，为长途旅行提供充足弹药
+            for p in pois[:30]:
+                biz_ext = p.get("biz_ext", {})
+                
+                # 提取评分和价格
+                rating = "暂无"
+                cost = "暂无"
+                if isinstance(biz_ext, dict):
+                    rating = biz_ext.get("rating", "暂无")
+                    cost = biz_ext.get("cost", "暂无")
+                elif isinstance(biz_ext, list) and len(biz_ext) > 0 and isinstance(biz_ext[0], dict):
+                    rating = biz_ext[0].get("rating", "暂无")
+                    cost = biz_ext[0].get("cost", "暂无")
+
+                cleaned_pois.append({
+                    "名称": p.get("name", ""),
+                    "地址": p.get("address", ""),
+                    "类型": p.get("type", "").split(";")[0] if p.get("type") else "", # 仅取主类型
+                    "评分": rating,
+                    "价格": cost,
+                    "坐标": p.get("location", "")
+                })
+            # 返回极简JSON，禁用了ASCII以减少Unicode转义的Token开销
+            return json.dumps(cleaned_pois, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ POI数据清洗失败: {e}")
+            return raw_result
+    return raw_result
 
 @tool
 async def amap_maps_weather(city: str) -> str:
     """查询指定城市的天气信息。返回近期天气的文本描述。"""
-    return await _call_mcp_tool_async("maps_weather", {"city": city})
+    raw_result = await _call_mcp_tool_async("maps_weather", {"city": city})
+    
+    import json
+    import re
+    # === 数据瘦身清洗层 ===
+    json_match = re.search(r'\{.*\}', raw_result, re.DOTALL)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            forecasts = data.get("forecasts", [])
+            cleaned_weather = []
+            
+            if forecasts and len(forecasts) > 0:
+                casts = forecasts[0].get("casts", [])
+                for c in casts:
+                    cleaned_weather.append({
+                        "日期": c.get("date", ""),
+                        "白天天气": c.get("dayweather", ""),
+                        "夜间天气": c.get("nightweather", ""),
+                        "白天温度": c.get("daytemp", ""),
+                        "夜间温度": c.get("nighttemp", "")
+                    })
+            return json.dumps(cleaned_weather, ensure_ascii=False)
+        except Exception as e:
+            print(f"⚠️ 天气数据清洗失败: {e}")
+            return raw_result
+    return raw_result
