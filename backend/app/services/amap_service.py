@@ -13,15 +13,23 @@ from mcp.client.session import ClientSession
 # MCP 长连接缓存
 _mcp_session_context = None
 _mcp_exit_stack = contextlib.AsyncExitStack()
+_mcp_init_lock = asyncio.Lock()
 
 async def init_mcp_client():
     """初始化全局MCP客户端并保持长连接"""
     global _mcp_session_context
+    
+    # 第一次检查（无锁快速返回）
     if _mcp_session_context is not None:
         return
         
-    print("🔄 正在初始化全局 MCP 长连接池...")
-    settings = get_settings()
+    async with _mcp_init_lock:
+        # 第二次检查（获取锁后再次确认，防止并发穿透）
+        if _mcp_session_context is not None:
+            return
+            
+        print("🔄 正在初始化全局 MCP 长连接池...")
+        settings = get_settings()
     if not settings.amap_api_key:
         raise ValueError("高德地图API Key未配置,请在.env文件中设置AMAP_API_KEY")
         

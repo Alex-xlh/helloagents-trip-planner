@@ -116,7 +116,7 @@ async def get_attraction_photo(name: str):
                 "keywords": name,
                 "key": api_key,
                 "extensions": "all",  # 需要设置为all才能获取深度信息(含图片)
-                "offset": 1,
+                "offset": 5,          # 获取前5个结果，增加命中率
                 "page": 1
             }
             
@@ -125,13 +125,15 @@ async def get_attraction_photo(name: str):
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("status") == "1" and data.get("pois"):
-                        poi = data["pois"][0]
-                        photos = poi.get("photos", [])
-                        if photos and len(photos) > 0:
-                            # 过滤掉不存在的或空的URL
-                            valid_photos = [p for p in photos if isinstance(p, dict) and p.get("url")]
-                            if valid_photos:
-                                photo_url = valid_photos[0]["url"]
+                        # 遍历前5个POI，寻找任何一个带有图片的POI
+                        for poi in data["pois"]:
+                            photos = poi.get("photos", [])
+                            if photos and isinstance(photos, list) and len(photos) > 0:
+                                # 过滤掉不存在的或空的URL
+                                valid_photos = [p for p in photos if isinstance(p, dict) and p.get("url")]
+                                if valid_photos:
+                                    photo_url = valid_photos[0]["url"]
+                                    break # 找到第一张有效的图片就立刻跳出循环
 
         return {
             "success": True,
