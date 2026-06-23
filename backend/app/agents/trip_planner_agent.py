@@ -105,29 +105,43 @@ class MultiAgentTripPlanner:
 
             # === 定义后台计算任务 ===
             async def fetch_and_plan():
+                import time
                 keywords = request.preferences[0] if request.preferences else "景点"
                 attraction_query = f"请搜索{request.city}的{keywords}相关景点"
                 weather_query = f"请查询{request.city}的天气信息"
                 hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
 
                 async def fetch_attractions():
+                    start_t = time.time()
                     res = await self.attraction_agent.ainvoke({"messages": [("human", attraction_query)]})
+                    end_t = time.time()
+                    print(f"⏱️ [Attraction Agent] 景点抓取耗时: {end_t - start_t:.2f} 秒")
                     return res["messages"][-1].content
 
                 async def fetch_weather():
+                    start_t = time.time()
                     res = await self.weather_agent.ainvoke({"messages": [("human", weather_query)]})
+                    end_t = time.time()
+                    print(f"⏱️ [Weather Agent] 天气查询耗时: {end_t - start_t:.2f} 秒")
                     return res["messages"][-1].content
 
                 async def fetch_hotels():
+                    start_t = time.time()
                     res = await self.hotel_agent.ainvoke({"messages": [("human", hotel_query)]})
+                    end_t = time.time()
+                    print(f"⏱️ [Hotel Agent] 酒店搜索耗时: {end_t - start_t:.2f} 秒")
                     return res["messages"][-1].content
 
                 # 并发收集数据
+                gather_start = time.time()
                 attraction_response, weather_response, hotel_response = await asyncio.gather(
                     fetch_attractions(),
                     fetch_weather(),
                     fetch_hotels()
                 )
+                gather_end = time.time()
+                print(f"🔥 [并发总耗时] 3大前置 Agent 执行完毕共计耗时: {gather_end - gather_start:.2f} 秒")
+
 #如果用高级模型可以升级
                 # 核心排版 LLM
                 parser = PydanticOutputParser(pydantic_object=TripPlan)
@@ -138,6 +152,9 @@ class MultiAgentTripPlanner:
                 prefs = ', '.join(request.preferences) if request.preferences else '无'
                 
                 planner_chain = prompt_planner | self.llm | parser
+                
+                print(f"🧠 [Planner Agent] 开始执行最终规划...")
+                planner_start = time.time()
                 trip_plan = await planner_chain.ainvoke({
                     "city": request.city,
                     "start_date": request.start_date,
@@ -152,6 +169,8 @@ class MultiAgentTripPlanner:
                     "hotels": hotel_response,
                     "format_instructions": parser.get_format_instructions()
                 })
+                planner_end = time.time()
+                print(f"🎯 [Planner Agent] 最终行程规划生成耗时: {planner_end - planner_start:.2f} 秒")
                 return trip_plan
 
             # 🚀 1. 立即启动后台繁重的计算任务 (不 await, 扔到后台去跑)
