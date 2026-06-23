@@ -1,5 +1,13 @@
 <template>
   <div class="result-container">
+    <!-- 背景装饰 (Liquid Glass Fluid Shapes) -->
+    <div class="bg-decoration">
+      <div class="circle circle-1"></div>
+      <div class="circle circle-2"></div>
+      <div class="circle circle-3"></div>
+      <div class="glass-overlay"></div>
+    </div>
+
     <!-- 页面头部 -->
     <div class="page-header">
       <a-button class="back-button" size="large" @click="goBack">
@@ -525,6 +533,22 @@ const exportAsImage = async () => {
       }
     }
 
+    // 注入全量覆盖样式，强制去除可能导致 html2canvas 渲染黑屏或崩溃的 css
+    const styleEl = document.createElement('style')
+    styleEl.innerHTML = `
+      * {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+      .ant-card {
+        background: #ffffff !important;
+      }
+      .day-info, .budget-item, .ant-collapse-item, .ant-collapse-header {
+        background: #f5f7fa !important;
+      }
+    `
+    exportContainer.appendChild(styleEl)
+
     // 移除所有ant-card类,替换为纯div
     const cards = exportContainer.querySelectorAll('.ant-card')
     cards.forEach((card) => {
@@ -661,6 +685,22 @@ const exportAsPDF = async () => {
         }
       }
     }
+
+    // 注入全量覆盖样式，强制去除可能导致 html2canvas 渲染黑屏或崩溃的 css
+    const styleEl = document.createElement('style')
+    styleEl.innerHTML = `
+      * {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+      .ant-card {
+        background: #ffffff !important;
+      }
+      .day-info, .budget-item, .ant-collapse-item, .ant-collapse-header {
+        background: #f5f7fa !important;
+      }
+    `
+    exportContainer.appendChild(styleEl)
 
     // 移除所有ant-card类,替换为纯div
     const cards = exportContainer.querySelectorAll('.ant-card')
@@ -925,8 +965,64 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 <style scoped>
 .result-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: #F0F9FF; /* Liquid Glass base bg */
+  font-family: 'Jost', 'Bodoni Moda', sans-serif;
   padding: 40px 20px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* 动态流体背景特效 */
+.bg-decoration {
+  position: fixed; /* fix it so it stays while scrolling */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  animation: liquidFloat 20s infinite alternate ease-in-out;
+}
+
+.circle-1 {
+  width: 600px;
+  height: 600px;
+  top: -200px;
+  left: -100px;
+  background: rgba(14, 165, 233, 0.15); /* #0EA5E9 primary */
+  animation-delay: 0s;
+}
+
+.circle-2 {
+  width: 500px;
+  height: 500px;
+  top: 30%;
+  right: -150px;
+  background: rgba(56, 189, 248, 0.12); /* #38BDF8 secondary */
+  animation-delay: -5s;
+}
+
+.circle-3 {
+  width: 400px;
+  height: 400px;
+  bottom: -100px;
+  left: 20%;
+  background: rgba(249, 115, 22, 0.08); /* #F97316 orange accent */
+  animation-delay: -10s;
+}
+
+@keyframes liquidFloat {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(30px, -50px) scale(1.1) rotate(10deg); }
+  66% { transform: translate(-20px, 20px) scale(0.9) rotate(-5deg); }
+  100% { transform: translate(0, 0) scale(1) rotate(0deg); }
 }
 
 .page-header {
@@ -935,12 +1031,39 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  animation: fadeInDown 0.6s ease-out;
+  animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  z-index: 1;
 }
 
 .back-button {
-  border-radius: 8px;
+  border-radius: 20px;
   font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  color: #0C4A6E;
+  transition: all 0.3s ease;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: #0EA5E9;
+  color: #0EA5E9;
+  transform: translateY(-2px);
+}
+
+.page-header :deep(.ant-btn) {
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+}
+.page-header :deep(.ant-btn-primary) {
+  background: #0EA5E9;
+  border-color: #0EA5E9;
+}
+.page-header :deep(.ant-btn-primary:hover) {
+  background: #0284C7;
+  border-color: #0284C7;
 }
 
 /* 内容布局 */
@@ -949,6 +1072,8 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
   margin: 0 auto;
   display: flex;
   gap: 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .side-nav {
@@ -957,24 +1082,32 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 }
 
 .side-nav :deep(.ant-menu) {
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  background: white;
+  border-radius: 24px;
+  box-shadow: 0 15px 35px -10px rgba(12, 74, 110, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  padding: 12px 8px;
 }
 
 .side-nav :deep(.ant-menu-item) {
   margin: 4px 8px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #475569;
+  font-weight: 500;
 }
 
 .side-nav :deep(.ant-menu-item-selected) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
   color: white;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
-.side-nav :deep(.ant-menu-item:hover) {
-  background: rgba(102, 126, 234, 0.1);
+.side-nav :deep(.ant-menu-item:hover:not(.ant-menu-item-selected)) {
+  background: rgba(255, 255, 255, 0.9);
+  color: #0EA5E9;
 }
 
 .main-content {
@@ -986,7 +1119,7 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 .attraction-image-wrapper {
   position: relative;
   margin-bottom: 12px;
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
 }
 
@@ -994,7 +1127,7 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
   width: 100%;
   height: 200px;
   object-fit: cover;
-  transition: transform 0.3s ease;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .attraction-image-wrapper:hover .attraction-image {
@@ -1005,7 +1138,7 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
   position: absolute;
   top: 12px;
   left: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
   color: white;
   width: 36px;
   height: 36px;
@@ -1014,42 +1147,48 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
 .badge-number {
   font-size: 18px;
+  font-family: 'Bodoni Moda', serif;
 }
 
 .price-tag {
   position: absolute;
   top: 12px;
   right: 12px;
-  background: rgba(255, 77, 79, 0.9);
+  background: rgba(249, 115, 22, 0.9); /* #F97316 orange */
+  backdrop-filter: blur(4px);
   color: white;
   padding: 4px 12px;
   border-radius: 12px;
   font-weight: bold;
   font-size: 14px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
 }
 
 /* 天气卡片样式 */
 .weather-card {
-  background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
-  border: none !important;
-  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 16px !important;
 }
 
 .weather-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 15px 30px rgba(14, 165, 233, 0.1) !important;
+  border-color: rgba(255, 255, 255, 1) !important;
 }
 
 .weather-date {
   font-size: 16px;
   font-weight: bold;
-  color: #00796b;
+  color: #0C4A6E;
   margin-bottom: 12px;
   text-align: center;
 }
@@ -1067,21 +1206,21 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 
 .weather-label {
   font-size: 12px;
-  color: #666;
+  color: #64748B;
 }
 
 .weather-value {
   font-size: 16px;
   font-weight: 600;
-  color: #00796b;
+  color: #0284C7;
 }
 
 .weather-wind {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid rgba(0, 121, 107, 0.2);
+  border-top: 1px dashed rgba(14, 165, 233, 0.2);
   text-align: center;
-  color: #00796b;
+  color: #0284C7;
   font-size: 14px;
 }
 
@@ -1089,7 +1228,7 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 .back-top-button {
   width: 50px;
   height: 50px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0EA5E9;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -1097,43 +1236,47 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
   justify-content: center;
   font-size: 24px;
   font-weight: bold;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .back-top-button:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  transform: scale(1.1) translateY(-5px);
+  background: #0284C7;
+  box-shadow: 0 15px 25px rgba(14, 165, 233, 0.4);
 }
 
 /* 酒店卡片样式 */
 .hotel-card {
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-  border: none !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(10px);
 }
 
 .hotel-card :deep(.ant-card-head) {
-  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  background: transparent !important;
+  border-bottom: 1px dashed rgba(14, 165, 233, 0.2) !important;
 }
 
 .hotel-title {
-  color: white !important;
-  font-weight: 600;
+  color: #0C4A6E !important;
+  font-weight: 700;
+  font-size: 16px;
 }
 
 /* 顶部信息区布局 */
 .top-info-section {
   display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: 24px;
+  margin-bottom: 24px;
 }
 
 .left-info {
   flex: 0 0 400px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .right-map {
@@ -1148,24 +1291,24 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 .overview-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .info-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .info-label {
   font-size: 14px;
   font-weight: 600;
-  color: #666;
+  color: #475569;
 }
 
 .info-value {
   font-size: 15px;
-  color: #333;
+  color: #0F172A;
   line-height: 1.6;
 }
 
@@ -1178,37 +1321,47 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .budget-item {
   text-align: center;
-  padding: 12px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
-  border-radius: 8px;
-  border: 1px solid #e8e8e8;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.budget-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(14, 165, 233, 0.05);
 }
 
 .budget-label {
   font-size: 13px;
-  color: #666;
+  color: #64748B;
   margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .budget-value {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 20px;
   font-weight: 700;
-  color: #1890ff;
+  color: #0EA5E9;
 }
 
 .budget-total {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
+  padding: 20px;
+  background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
+  border-radius: 16px;
   color: white;
+  box-shadow: 0 10px 20px rgba(14, 165, 233, 0.2);
 }
 
 .total-label {
@@ -1217,6 +1370,7 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 }
 
 .total-value {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 28px;
   font-weight: 700;
 }
@@ -1228,13 +1382,18 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 }
 
 .map-card :deep(.ant-card-body) {
-  height: calc(100% - 57px);
-  padding: 0;
+  height: calc(100% - 64px);
+  padding: 8px !important;
+}
+
+#amap-container {
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 /* 每日行程卡片 */
 .days-card {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .day-header {
@@ -1246,27 +1405,29 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 
 .day-title {
   font-size: 18px;
-  font-weight: 600;
-  color: #333;
+  font-weight: 700;
+  color: #0C4A6E;
+  font-family: 'Bodoni Moda', serif;
 }
 
 .day-date {
   font-size: 14px;
-  color: #999;
+  color: #64748B;
+  font-weight: 500;
 }
 
 .day-info {
-  margin-bottom: 20px;
-  padding: 16px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
-  border-radius: 8px;
-  border: 1px solid #e8e8e8;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
 .info-row {
   display: flex;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .info-row:last-child {
@@ -1275,114 +1436,106 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 
 .info-row .label {
   font-weight: 600;
-  color: #666;
+  color: #475569;
   min-width: 100px;
 }
 
 .info-row .value {
-  color: #333;
+  color: #0F172A;
   flex: 1;
 }
 
-/* 卡片样式优化 */
+/* 卡片整体基调 (Liquid Glass) */
 :deep(.ant-card) {
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  margin-bottom: 20px;
-  transition: all 0.3s ease;
-  animation: fadeInUp 0.6s ease-out;
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(12, 74, 110, 0.08);
+  margin-bottom: 24px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
 }
 
 :deep(.ant-card:hover) {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 30px 60px -12px rgba(12, 74, 110, 0.12);
+  border-color: rgba(255, 255, 255, 1) !important;
 }
 
 :deep(.ant-card-head) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white !important;
-  border-radius: 12px 12px 0 0;
-  font-weight: 600;
+  background: transparent !important;
+  color: #0C4A6E !important;
+  border-bottom: 1px solid rgba(14, 165, 233, 0.15) !important;
+  border-radius: 24px 24px 0 0;
+  padding: 20px 24px !important;
 }
 
 :deep(.ant-card-head-title) {
-  color: white !important;
-  font-size: 18px;
+  color: #0C4A6E !important;
+  font-size: 20px;
+  font-family: 'Bodoni Moda', serif;
+  font-weight: 600;
 }
 
 :deep(.ant-card-head-title span) {
-  color: white !important;
+  color: #0C4A6E !important;
 }
 
-/* Collapse样式 */
+:deep(.ant-card-body) {
+  padding: 24px !important;
+}
+
+/* Collapse 手风琴样式 */
 :deep(.ant-collapse) {
   border: none;
   background: transparent;
 }
 
 :deep(.ant-collapse-item) {
-  margin-bottom: 16px;
-  border: 1px solid #e8e8e8;
-  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 20px !important;
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
 }
 
 :deep(.ant-collapse-header) {
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
-  padding: 16px 20px !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  padding: 20px 24px !important;
   font-weight: 600;
+  border-radius: 20px !important;
+  transition: all 0.3s ease;
+}
+
+:deep(.ant-collapse-item-active .ant-collapse-header) {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
 }
 
 :deep(.ant-collapse-content) {
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid rgba(14, 165, 233, 0.1) !important;
+  background: transparent !important;
 }
 
 :deep(.ant-collapse-content-box) {
-  padding: 20px;
-}
-
-/* 统计卡片样式 */
-:deep(.ant-statistic-title) {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 8px;
-}
-
-:deep(.ant-statistic-content) {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1890ff;
+  padding: 24px !important;
 }
 
 /* 景点卡片样式 */
 :deep(.ant-list-item) {
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :deep(.ant-list-item:hover) {
-  transform: scale(1.02);
+  transform: translateY(-4px);
 }
-
-/* 动画 */
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+:deep(.ant-list-item .ant-card) {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
 }
 
 /* 响应式设计 */
@@ -1391,9 +1544,26 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
     padding: 20px 10px;
   }
 
-  .page-header {
+  .content-wrapper {
     flex-direction: column;
-    gap: 16px;
+  }
+
+  .side-nav {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .top-info-section {
+    flex-direction: column;
+  }
+
+  .left-info {
+    flex: none;
+    width: 100%;
+  }
+
+  .map-card {
+    min-height: 400px;
   }
 }
 </style>
