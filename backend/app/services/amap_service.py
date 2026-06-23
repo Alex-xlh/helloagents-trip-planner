@@ -10,25 +10,26 @@ from ..models.schemas import Location, POIInfo, WeatherInfo
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.session import ClientSession
 
-# MCP 长连接缓存
-_mcp_session_context = None
+# MCP 长连接缓存池
+_mcp_pool = None
+_mcp_pool_initialized = False
 _mcp_exit_stack = contextlib.AsyncExitStack()
 _mcp_init_lock = asyncio.Lock()
 
 async def init_mcp_client():
-    """初始化全局MCP客户端并保持长连接"""
-    global _mcp_session_context
+    """初始化全局MCP客户端并发连接池并保持长连接"""
+    global _mcp_pool, _mcp_pool_initialized
     
     # 第一次检查（无锁快速返回）
-    if _mcp_session_context is not None:
+    if _mcp_pool_initialized:
         return
         
     async with _mcp_init_lock:
         # 第二次检查（获取锁后再次确认，防止并发穿透）
-        if _mcp_session_context is not None:
+        if _mcp_pool_initialized:
             return
             
-        print("🔄 正在初始化全局 MCP 长连接池...")
+        print("🔄 正在初始化 MCP 并发连接池 (容量: 3)...")
         settings = get_settings()
     if not settings.amap_api_key:
         raise ValueError("高德地图API Key未配置,请在.env文件中设置AMAP_API_KEY")
@@ -44,40 +45,53 @@ async def init_mcp_client():
     )
     
     try:
-        # 建立持久化的进程和管道上下文
-        transport = await _mcp_exit_stack.enter_async_context(stdio_client(server_params))
-        read, write = transport
+        _mcp_pool = asyncio.Queue()
+        POOL_SIZE = 3
         
-        # 建立持久化的Session会话上下文
-        _mcp_session_context = await _mcp_exit_stack.enter_async_context(ClientSession(read, write))
-        await _mcp_session_context.initialize()
-        print("✅ 全局 MCP 长连接初始化成功！(所有Agent将共享此通道)")
+        for i in range(POOL_SIZE):
+            print(f"  - 正在启动 Node.js MCP 进程 {i+1}/{POOL_SIZE} ...")
+            # 建立持久化的进程和管道上下文
+            transport = await _mcp_exit_stack.enter_async_context(stdio_client(server_params))
+            read, write = transport
+            
+            # 建立持久化的Session会话上下文
+            session = await _mcp_exit_stack.enter_async_context(ClientSession(read, write))
+            await session.initialize()
+            
+            # 放入连接池
+            await _mcp_pool.put(session)
+            
+        _mcp_pool_initialized = True
+        print("✅ MCP 并发连接池拉起成功！(彻底消除单通道死锁，实现物理并发)")
     except Exception as e:
-        print(f"❌ 初始化 MCP 长连接失败: {e}")
+        print(f"❌ 初始化 MCP 长连接池失败: {e}")
         await _mcp_exit_stack.aclose()
-        _mcp_session_context = None
+        _mcp_pool_initialized = False
         raise
 
 async def close_mcp_client():
     """安全释放MCP长连接"""
-    global _mcp_session_context
-    print("🧹 正在释放 MCP 长连接资源...")
+    global _mcp_pool, _mcp_pool_initialized
+    print("🧹 正在释放 MCP 连接池资源...")
     await _mcp_exit_stack.aclose()
-    _mcp_session_context = None
+    _mcp_pool = None
+    _mcp_pool_initialized = False
     print("✅ MCP 资源已安全回收。")
 
-_mcp_lock = asyncio.Lock()
-
 async def _call_mcp_tool_async(tool_name: str, arguments: dict) -> str:
-    """使用MCP SDK异步调用工具(复用长连接)"""
-    if _mcp_session_context is None:
-        print("⚠️ 检测到 MCP 长连接尚未建立，正在进行临时初始化...")
+    """使用MCP SDK异步调用工具(从连接池中获取)"""
+    if not _mcp_pool_initialized:
+        print("⚠️ 检测到 MCP 连接池尚未建立，正在进行临时初始化...")
         await init_mcp_client()
         
-    # 添加互斥锁：MCP的 stdio 通道在极端高并发下如果不加锁，极易引发读写死锁或数据包错乱
-    async with _mcp_lock:
-        # 直接复用已经握手好的通道，实现毫秒级响应
-        result = await _mcp_session_context.call_tool(tool_name, arguments=arguments)
+    # 从连接池中借用一个通道（如果满了则挂起等待）
+    session = await _mcp_pool.get()
+    try:
+        # 物理并发调用，互不干扰
+        result = await session.call_tool(tool_name, arguments=arguments)
+    finally:
+        # 用完后必须归还给连接池，否则池子会枯竭
+        await _mcp_pool.put(session)
     
     if result.content:
         # 提取纯文本内容

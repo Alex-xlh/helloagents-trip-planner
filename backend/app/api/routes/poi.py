@@ -90,12 +90,13 @@ async def search_poi(keywords: str, city: str = "北京"):
     summary="获取景点图片",
     description="根据景点名称从高德获取图片"
 )
-async def get_attraction_photo(name: str):
+async def get_attraction_photo(name: str, city: Optional[str] = None):
     """
     获取景点图片
 
     Args:
         name: 景点名称
+        city: 城市名称（可选，用于限定搜索范围）
 
     Returns:
         图片URL
@@ -119,6 +120,8 @@ async def get_attraction_photo(name: str):
                 "offset": 5,          # 获取前5个结果，增加命中率
                 "page": 1
             }
+            if city:
+                params["city"] = city
             
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, params=params, timeout=10)

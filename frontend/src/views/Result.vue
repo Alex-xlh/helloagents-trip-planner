@@ -433,7 +433,7 @@ const loadAttractionPhotos = async () => {
 
   tripPlan.value.days.forEach(day => {
     day.attractions.forEach(attraction => {
-      const promise = apiClient.get(`/api/poi/photo?name=${encodeURIComponent(attraction.name)}`)
+      const promise = apiClient.get(`/api/poi/photo?name=${encodeURIComponent(attraction.name)}&city=${encodeURIComponent(tripPlan.value.city)}`)
         .then(res => {
           const data = res.data
           if (data.success && data.data.photo_url) {
