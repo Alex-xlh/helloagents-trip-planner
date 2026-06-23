@@ -71,16 +71,9 @@ class MultiAgentTripPlanner:
         try:
             self.llm = get_llm()
 
-            # 1. 景点搜索 Agent
-            self.attraction_agent = create_react_agent(self.llm, tools=[amap_maps_text_search], prompt=ATTRACTION_AGENT_PROMPT)
+            # 1. 景点、天气、酒店 Agent 已移除 (升级为 Agentic Workflow，直接底层并发调用工具)
 
-            # 2. 天气查询 Agent
-            self.weather_agent = create_react_agent(self.llm, tools=[amap_maps_weather], prompt=WEATHER_AGENT_PROMPT)
-
-            # 3. 酒店推荐 Agent
-            self.hotel_agent = create_react_agent(self.llm, tools=[amap_maps_text_search], prompt=HOTEL_AGENT_PROMPT)
-
-            # 4. 预热管家 Greeting Agent (直接 Chain)
+            # 2. 预热管家 Greeting Agent (直接 Chain)
             self.greeting_chain = ChatPromptTemplate.from_template(GREETING_AGENT_PROMPT) | self.llm
 
 
@@ -106,31 +99,28 @@ class MultiAgentTripPlanner:
             # === 定义后台计算任务 ===
             async def fetch_and_plan():
                 import time
-                keywords = request.preferences[0] if request.preferences else "景点"
-                attraction_query = f"请搜索{request.city}的{keywords}相关景点"
-                weather_query = f"请查询{request.city}的天气信息"
-                hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
-
                 async def fetch_attractions():
                     start_t = time.time()
-                    res = await self.attraction_agent.ainvoke({"messages": [("human", attraction_query)]})
+                    prefs_str = " ".join(request.preferences) if request.preferences else "景点"
+                    res = await amap_maps_text_search.ainvoke({"keywords": prefs_str, "city": request.city})
                     end_t = time.time()
-                    print(f"⏱️ [Attraction Agent] 景点抓取耗时: {end_t - start_t:.2f} 秒")
-                    return res["messages"][-1].content
+                    print(f"⏱️ [Attraction Tool] 景点直调抓取耗时: {end_t - start_t:.2f} 秒")
+                    return res
 
                 async def fetch_weather():
                     start_t = time.time()
-                    res = await self.weather_agent.ainvoke({"messages": [("human", weather_query)]})
+                    res = await amap_maps_weather.ainvoke({"city": request.city})
                     end_t = time.time()
-                    print(f"⏱️ [Weather Agent] 天气查询耗时: {end_t - start_t:.2f} 秒")
-                    return res["messages"][-1].content
+                    print(f"⏱️ [Weather Tool] 天气直调查询耗时: {end_t - start_t:.2f} 秒")
+                    return res
 
                 async def fetch_hotels():
                     start_t = time.time()
-                    res = await self.hotel_agent.ainvoke({"messages": [("human", hotel_query)]})
+                    hotel_keywords = f"{request.accommodation} 酒店"
+                    res = await amap_maps_text_search.ainvoke({"keywords": hotel_keywords, "city": request.city})
                     end_t = time.time()
-                    print(f"⏱️ [Hotel Agent] 酒店搜索耗时: {end_t - start_t:.2f} 秒")
-                    return res["messages"][-1].content
+                    print(f"⏱️ [Hotel Tool] 酒店直调搜索耗时: {end_t - start_t:.2f} 秒")
+                    return res
 
                 # 并发收集数据
                 gather_start = time.time()
