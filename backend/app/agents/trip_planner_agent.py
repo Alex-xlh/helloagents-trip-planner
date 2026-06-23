@@ -238,35 +238,51 @@ class MultiAgentTripPlanner:
             print(f"偏好: {', '.join(request.preferences) if request.preferences else '无'}")
             print(f"{'='*60}\n")
 
+            import time
+            total_start_time = time.time()
+
             # 步骤1: 景点搜索Agent搜索景点
             print("📍 步骤1: 搜索景点...")
             attraction_query = self._build_attraction_query(request)
+            t1 = time.time()
             attraction_response = self.attraction_agent.run(attraction_query)
+            t2 = time.time()
+            print(f"⏱️ [Attraction Agent] 耗时: {t2 - t1:.2f} 秒")
             print(f"景点搜索结果: {attraction_response[:200]}...\n")
 
             # 步骤2: 天气查询Agent查询天气
             print("🌤️  步骤2: 查询天气...")
             weather_query = f"请查询{request.city}的天气信息"
+            t3 = time.time()
             weather_response = self.weather_agent.run(weather_query)
+            t4 = time.time()
+            print(f"⏱️ [Weather Agent] 耗时: {t4 - t3:.2f} 秒")
             print(f"天气查询结果: {weather_response[:200]}...\n")
 
             # 步骤3: 酒店推荐Agent搜索酒店
             print("🏨 步骤3: 搜索酒店...")
             hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
+            t5 = time.time()
             hotel_response = self.hotel_agent.run(hotel_query)
+            t6 = time.time()
+            print(f"⏱️ [Hotel Agent] 耗时: {t6 - t5:.2f} 秒")
             print(f"酒店搜索结果: {hotel_response[:200]}...\n")
 
             # 步骤4: 行程规划Agent整合信息生成计划
             print("📋 步骤4: 生成行程计划...")
             planner_query = self._build_planner_query(request, attraction_response, weather_response, hotel_response)
+            t7 = time.time()
             planner_response = self.planner_agent.run(planner_query)
+            t8 = time.time()
+            print(f"⏱️ [Planner Agent] 耗时: {t8 - t7:.2f} 秒")
             print(f"行程规划结果: {planner_response[:300]}...\n")
 
             # 解析最终计划
             trip_plan = self._parse_response(planner_response, request)
 
             print(f"{'='*60}")
-            print(f"✅ 旅行计划生成完成!")
+            total_end_time = time.time()
+            print(f"✅ 旅行计划生成完成! 总耗时: {total_end_time - total_start_time:.2f} 秒")
             print(f"{'='*60}\n")
 
             return trip_plan
