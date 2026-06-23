@@ -5,7 +5,7 @@ import asyncio
 from typing import Dict, Any, List
 from langgraph.prebuilt import create_react_agent
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser
 from pydantic import ValidationError
 
 from ..services.llm_service import get_llm
@@ -58,6 +58,16 @@ PLANNER_AGENT_PROMPT = """你是高端旅行规划专家。你的任务是根据
 
 GREETING_AGENT_PROMPT = """你是专属旅行预热管家。当用户准备前往 {city} 时，你需要写一段 150 字左右的开场白，热情介绍该城市的特色风土人情，并明确告诉用户“我正在后台为您极速调取高德地图和天气数据，并为您精心编织行程，请稍候...”。语气要非常高端、优雅、亲切。直接使用纯文本或 Markdown 输出，不需要任何真实的数据。"""
 
+INTENT_ROUTER_PROMPT = """你是核心意图提取器。
+用户的附加要求为：【{free_text_input}】。
+
+你的唯一任务是：判断用户是否在附加要求中，明确指定了必须要去的**具体专有名词（如特定的景点名、酒店名、餐厅名、地名）**。
+你必须且只能输出一个 JSON 对象，严禁输出任何多余的解释文本或 markdown 格式块。结构严格如下：
+{{
+  "must_fetch_pois": ["提取出的具体专有名词，例如'欢乐谷'、'全聚德'。如果没有明确指定具体地名，则返回空数组 []"]
+}}
+"""
+
 
 
 
@@ -75,6 +85,9 @@ class MultiAgentTripPlanner:
 
             # 2. 预热管家 Greeting Agent (直接 Chain)
             self.greeting_chain = ChatPromptTemplate.from_template(GREETING_AGENT_PROMPT) | self.llm
+
+            # 3. 意图路由器 Router Agent
+            self.router_chain = ChatPromptTemplate.from_template(INTENT_ROUTER_PROMPT) | self.llm | JsonOutputParser()
 
 
             print(f"✅ 多智能体系统初始化成功 (LangChain)")
@@ -99,13 +112,48 @@ class MultiAgentTripPlanner:
             # === 定义后台计算任务 ===
             async def fetch_and_plan():
                 import time
+                
+                # --- A. 意图解析 (Router Agent) ---
+                print("🧠 [Router Agent] 开始极速解析意图...")
+                router_start = time.time()
+                prefs_joined = " ".join(request.preferences) if request.preferences else "无特殊偏好"
+                extra_reqs = request.free_text_input if request.free_text_input else "无"
+                try:
+                    intent_data = await self.router_chain.ainvoke({
+                        "city": request.city,
+                        "preferences": prefs_joined,
+                        "free_text_input": extra_reqs
+                    })
+                except Exception as e:
+                    print(f"⚠️ [Router Agent] 解析失败，使用默认退化策略: {e}")
+                    intent_data = {
+                        "must_fetch_pois": []
+                    }
+                router_end = time.time()
+                print(f"⏱️ [Router Agent] 意图解析耗时: {router_end - router_start:.2f} 秒. 提取结果: {intent_data}")
+
+                # --- B. 数据抓取 (Python Script) ---
                 async def fetch_attractions():
                     start_t = time.time()
-                    prefs_str = " ".join(request.preferences) if request.preferences else "景点"
-                    res = await amap_maps_text_search.ainvoke({"keywords": prefs_str, "city": request.city})
+                    
+                    # 1. 抓取基础推荐标签 (直接使用用户的 preferences)
+                    tags_str = " ".join(request.preferences) if request.preferences else "著名景点"
+                    
+                    # 使用 asyncio.gather 并发抓取“偏好推荐”和“必去清单”
+                    tasks = [amap_maps_text_search.ainvoke({"keywords": tags_str, "city": request.city})]
+                    
+                    # 2. 对每个必去地点额外派发抓取任务，确保绝对命中
+                    must_visits = intent_data.get("must_fetch_pois", [])
+                    for mv in must_visits:
+                        tasks.append(amap_maps_text_search.ainvoke({"keywords": mv, "city": request.city}))
+                    
+                    results = await asyncio.gather(*tasks)
+                    # 简单拼接所有返回内容
+                    combined_res = "\n\n".join(results)
+                    
                     end_t = time.time()
-                    print(f"⏱️ [Attraction Tool] 景点直调抓取耗时: {end_t - start_t:.2f} 秒")
-                    return res
+                    print(f"⏱️ [Attraction Tool] 景点直调抓取耗时: {end_t - start_t:.2f} 秒 (包含必去清单)")
+                    return combined_res
 
                 async def fetch_weather():
                     start_t = time.time()
@@ -132,17 +180,15 @@ class MultiAgentTripPlanner:
                 gather_end = time.time()
                 print(f"🔥 [并发总耗时] 3大前置 Agent 执行完毕共计耗时: {gather_end - gather_start:.2f} 秒")
 
-#如果用高级模型可以升级
+                # --- C. 行程规划 (Planner Agent) ---
                 # 核心排版 LLM
                 parser = PydanticOutputParser(pydantic_object=TripPlan)
                 prompt_planner = ChatPromptTemplate.from_template(
                     PLANNER_AGENT_PROMPT + "\n\n{format_instructions}"
                 )
-                extra_reqs = f"\n**额外要求:** {request.free_text_input}" if request.free_text_input else ""
-                prefs = ', '.join(request.preferences) if request.preferences else '无'
-                
                 planner_chain = prompt_planner | self.llm | parser
-                
+
+                # 把原始附加条件完整传给 planner
                 print(f"🧠 [Planner Agent] 开始执行最终规划...")
                 planner_start = time.time()
                 trip_plan = await planner_chain.ainvoke({
@@ -152,8 +198,8 @@ class MultiAgentTripPlanner:
                     "travel_days": request.travel_days,
                     "transportation": request.transportation,
                     "accommodation": request.accommodation,
-                    "preferences": prefs,
-                    "extra_reqs": extra_reqs,
+                    "preferences": prefs_joined,
+                    "extra_reqs": f"特殊要求：{extra_reqs}",
                     "attractions": attraction_response,
                     "weather": weather_response,
                     "hotels": hotel_response,
