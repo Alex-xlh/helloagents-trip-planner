@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from ..config import get_settings, validate_config, print_config
-from .routes import trip, poi, map as map_routes
+from .routes import trip, poi, map as map_routes, auth, history
 from ..services.amap_service import init_mcp_client, close_mcp_client
+from ..core.database import engine
+from ..models.db import Base
 
 # 获取配置
 settings = get_settings()
@@ -40,6 +42,15 @@ async def lifespan(app: FastAPI):
         await init_mcp_client()
     except Exception as e:
         print(f"⚠️ MCP长连接池初始化失败，将降级为请求时初始化: {e}")
+        
+    # 初始化数据库
+    try:
+        async with engine.begin() as conn:
+            # 在实际生产中应该使用 alembic 进行迁移，这里简单创建表
+            await conn.run_sync(Base.metadata.create_all)
+        print("✅ 数据库表初始化成功")
+    except Exception as e:
+        print(f"❌ 数据库初始化失败: {e}")
     
     yield # 让应用开始处理请求
     
@@ -81,6 +92,8 @@ app.add_middleware(
 app.include_router(trip.router, prefix="/api")
 app.include_router(poi.router, prefix="/api")
 app.include_router(map_routes.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(history.router, prefix="/api")
 
 @app.get("/")
 async def root():

@@ -212,10 +212,13 @@ import { ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { generateTripPlanStream } from '@/services/api'
+import apiClient from '@/services/api'
+import { useAuthStore } from '@/store/auth'
 import type { TripFormData } from '@/types'
 import type { Dayjs } from 'dayjs'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const streamedText = ref('')
 const streamingBox = ref<HTMLElement | null>(null)
@@ -305,6 +308,19 @@ const handleSubmit = async () => {
 
     sessionStorage.setItem('tripPlan', JSON.stringify(tripPlanData))
     message.success('旅行计划生成成功!')
+    
+    // 如果用户已登录，自动保存到历史记录
+    if (authStore.isLoggedIn && tripPlanData) {
+      try {
+        await apiClient.post('/api/history', {
+          destination: requestData.city,
+          trip_data: tripPlanData
+        })
+        message.success('已自动存档到历史记录')
+      } catch (e) {
+        console.error('自动保存行程失败', e)
+      }
+    }
     
     setTimeout(() => {
       router.push('/result')

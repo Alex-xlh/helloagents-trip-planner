@@ -1,5 +1,7 @@
 import axios from 'axios'
 import type { TripFormData } from '@/types'
+import { useAuthStore } from '@/store/auth'
+import { message } from 'ant-design-vue'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -14,6 +16,10 @@ const apiClient = axios.create({
 // 请求拦截器
 apiClient.interceptors.request.use(
   (config) => {
+    const authStore = useAuthStore()
+    if (authStore.token) {
+      config.headers['Authorization'] = `Bearer ${authStore.token}`
+    }
     console.log('发送请求:', config.method?.toUpperCase(), config.url)
     return config
   },
@@ -31,6 +37,11 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     console.error('响应错误:', error.response?.status, error.message)
+    if (error.response?.status === 401) {
+      const authStore = useAuthStore()
+      authStore.logout()
+      message.error('登录状态已过期，请重新登录')
+    }
     return Promise.reject(error)
   }
 )
@@ -48,11 +59,17 @@ export async function generateTripPlanStream(
     const baseUrlStr = import.meta.env.VITE_API_BASE_URL ? API_BASE_URL : ''
     const url = `${baseUrlStr}/api/trip/plan/stream`
     
+    const authStore = useAuthStore()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    }
+    if (authStore.token) {
+      headers['Authorization'] = `Bearer ${authStore.token}`
+    }
+    
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(formData)
     })
 
