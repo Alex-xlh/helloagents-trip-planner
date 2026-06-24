@@ -1,8 +1,8 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ...core.database import get_db
 from ...core.auth import (
@@ -13,12 +13,31 @@ from ...core.auth import (
     get_current_user
 )
 from ...models.db import User
+from ...core.limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 class UserCreate(BaseModel):
     username: str
     password: str
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError('密码长度不能少于6位')
+        if v.isdigit():
+            raise ValueError('密码不能为纯数字')
+        return v
+
+    @field_validator('username')
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        if len(v.strip()) < 2:
+            raise ValueError('用户名长度不能少于2位')
+        if len(v) > 50:
+            raise ValueError('用户名长度不能超过50位')
+        return v.strip()
 
 class UserLogin(BaseModel):
     username: str
@@ -34,8 +53,9 @@ class UserResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-@router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
+@router.post("/register", response_model=Token)
+@limiter.limit("5/minute")
+async def register(request: Request, user: UserCreate, db: AsyncSession = Depends(get_db)):
     # 检查用户名是否已存在
     stmt = select(User).where(User.username == user.username)
     result = await db.execute(stmt)
@@ -48,10 +68,16 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
-    return db_user
+    # 生成 JWT 用于自动登录
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": db_user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
-async def login(user_credentials: UserLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, user_credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     # 查询用户
     stmt = select(User).where(User.username == user_credentials.username)
     result = await db.execute(stmt)

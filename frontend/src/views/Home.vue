@@ -319,6 +319,7 @@ const handleSubmit = async () => {
         message.success('已自动存档到历史记录')
       } catch (e) {
         console.error('自动保存行程失败', e)
+        message.warning('行程已生成，但自动存档失败。您可在"历史行程"页面手动保存')
       }
     }
     

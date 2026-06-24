@@ -30,11 +30,17 @@ class Settings(BaseSettings):
     # 高德地图API配置
     amap_api_key: str = ""
 
+    # Database config
+    database_url: str = "sqlite+aiosqlite:///trips.db"
+    
+    # Auth config
+    jwt_secret_key: str = "change-me-in-production"
+    
     # Unsplash API配置
     unsplash_access_key: str = ""
     unsplash_secret_key: str = ""
 
-    # 日志配置
+    # Debug config
     log_level: str = "INFO"
     #给pydantic setting看的
     class Config:

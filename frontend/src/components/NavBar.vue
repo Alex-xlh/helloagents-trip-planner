@@ -41,12 +41,40 @@
       width="400px"
     >
       <a-form :model="formState" layout="vertical" class="auth-form" @finish="onFinish">
-        <a-form-item label="用户名" name="username" :rules="[{ required: true, message: '请输入用户名' }]">
+        <a-form-item 
+          label="用户名" 
+          name="username" 
+          :rules="[
+            { required: true, message: '请输入用户名' },
+            { min: 2, message: '用户名至少2位' }
+          ]"
+          :extra="!isLoginMode ? '要求：至少 2 位字符' : ''"
+        >
           <a-input v-model:value="formState.username" placeholder="输入用户名" size="large" />
         </a-form-item>
         
-        <a-form-item label="密码" name="password" :rules="[{ required: true, message: '请输入密码' }]">
+        <a-form-item 
+          label="密码" 
+          name="password" 
+          :rules="[
+            { required: true, message: '请输入密码' },
+            { validator: validatePasswordStrength, trigger: 'change' }
+          ]"
+          :extra="!isLoginMode ? '要求：至少 6 位，且不能全为数字' : ''"
+        >
           <a-input-password v-model:value="formState.password" placeholder="输入密码" size="large" />
+        </a-form-item>
+
+        <a-form-item
+          v-if="!isLoginMode"
+          label="确认密码"
+          name="confirmPassword"
+          :rules="[
+            { required: true, message: '请再次输入密码' },
+            { validator: validateConfirmPassword, trigger: 'change' }
+          ]"
+        >
+          <a-input-password v-model:value="formState.confirmPassword" placeholder="再次输入密码" size="large" />
         </a-form-item>
 
         <a-form-item>
@@ -85,8 +113,29 @@ const userInitial = computed(() => {
 
 const formState = reactive({
   username: '',
-  password: ''
+  password: '',
+  confirmPassword: ''
 })
+
+const validatePasswordStrength = async (_rule: any, value: string) => {
+  if (!value) {
+    return Promise.resolve() // Handled by required rule
+  }
+  if (value.length < 6) {
+    return Promise.reject('密码至少需要6位')
+  }
+  if (!isLoginMode.value && /^\d+$/.test(value)) {
+    return Promise.reject('密码不能为纯数字')
+  }
+  return Promise.resolve()
+}
+
+const validateConfirmPassword = async (_rule: any, value: string) => {
+  if (value && value !== formState.password) {
+    return Promise.reject('两次输入的密码不一致')
+  }
+  return Promise.resolve()
+}
 
 const goHome = () => {
   router.push('/')
@@ -109,26 +158,30 @@ const onFinish = async () => {
   try {
     const endpoint = isLoginMode.value ? '/api/auth/login' : '/api/auth/register'
     
-    // login needs form data, wait, backend expects application/json because we defined Pydantic model UserLogin, not OAuth2PasswordRequestForm
     const response = await apiClient.post(endpoint, {
       username: formState.username,
       password: formState.password
     })
 
+    // 注册和登录现在都返回 {access_token, token_type}
+    const { access_token } = response.data
+    authStore.login(access_token, formState.username)
+    
     if (!isLoginMode.value) {
-      // 注册成功，自动切换到登录
-      message.success('注册成功，请登录')
-      isLoginMode.value = true
+      message.success('注册成功，已自动登录')
     } else {
-      // 登录成功
-      const { access_token } = response.data
-      authStore.login(access_token, formState.username)
       message.success('登录成功')
-      showLogin.value = false
     }
+    showLogin.value = false
   } catch (error: any) {
     if (error.response && error.response.data && error.response.data.detail) {
-      message.error(error.response.data.detail)
+      const detail = error.response.data.detail
+      if (Array.isArray(detail)) {
+        // FastAPI validation error
+        message.error(detail[0].msg)
+      } else {
+        message.error(detail)
+      }
     } else {
       message.error(isLoginMode.value ? '登录失败' : '注册失败')
     }

@@ -24,11 +24,34 @@
       >
         <div class="trip-card-content">
           <h2 class="destination">{{ trip.destination }}</h2>
+          <img v-if="trip.thumbnail" :src="trip.thumbnail" class="trip-thumbnail" alt="thumbnail" />
           <div class="trip-meta">
             <span>📅 {{ new Date(trip.created_at).toLocaleDateString() }}</span>
+            <span>📆 {{ trip.travel_days }}天</span>
+            <span v-if="trip.total_budget">💰 ¥{{ trip.total_budget }}</span>
           </div>
         </div>
+        
+        <a-popconfirm
+          title="确定删除此行程？"
+          ok-text="删除"
+          cancel-text="取消"
+          @confirm="deleteTrip(trip.id)"
+        >
+          <button class="delete-btn" @click.stop>✕</button>
+        </a-popconfirm>
       </div>
+    </div>
+
+    <div class="pagination-wrapper" v-if="total > pageSize">
+      <a-pagination
+        v-model:current="currentPage"
+        :total="total"
+        :page-size="pageSize"
+        @change="fetchTrips"
+        show-size-changer
+        @showSizeChange="onShowSizeChange"
+      />
     </div>
   </div>
 </template>
@@ -42,16 +65,38 @@ import { message } from 'ant-design-vue'
 const router = useRouter()
 const trips = ref<any[]>([])
 const loading = ref(true)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 
 const fetchTrips = async () => {
   loading.value = true
   try {
-    const response = await apiClient.get('/api/history')
-    trips.value = response.data
+    const response = await apiClient.get('/api/history', {
+      params: { page: currentPage.value, page_size: pageSize.value }
+    })
+    trips.value = response.data.items
+    total.value = response.data.total
   } catch (error: any) {
     message.error('获取历史记录失败')
   } finally {
     loading.value = false
+  }
+}
+
+const onShowSizeChange = (_current: number, size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+  fetchTrips()
+}
+
+const deleteTrip = async (id: number) => {
+  try {
+    await apiClient.delete(`/api/history/${id}`)
+    message.success('已删除')
+    fetchTrips()
+  } catch (error) {
+    message.error('删除失败')
   }
 }
 
@@ -159,5 +204,42 @@ onMounted(() => {
   font-size: 14px;
   display: flex;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.trip-thumbnail {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255, 0, 0, 0.1);
+  color: red;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.trip-card:hover .delete-btn {
+  opacity: 1;
+}
+
+.pagination-wrapper {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
 }
 </style>

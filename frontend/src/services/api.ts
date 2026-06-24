@@ -1,6 +1,6 @@
 import axios from 'axios'
 import type { TripFormData } from '@/types'
-import { useAuthStore } from '@/store/auth'
+import { useAuthStore, isTokenExpired } from '@/store/auth'
 import { message } from 'ant-design-vue'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -18,6 +18,11 @@ apiClient.interceptors.request.use(
   (config) => {
     const authStore = useAuthStore()
     if (authStore.token) {
+      if (isTokenExpired(authStore.token)) {
+        authStore.logout()
+        message.warning('登录已过期，请重新登录')
+        return Promise.reject(new Error('Token expired'))
+      }
       config.headers['Authorization'] = `Bearer ${authStore.token}`
     }
     console.log('发送请求:', config.method?.toUpperCase(), config.url)

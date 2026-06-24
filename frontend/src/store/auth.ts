@@ -12,6 +12,33 @@ const state = reactive({
   username: getValidItem('username')
 })
 
+interface TokenPayload {
+  sub: string
+  exp: number
+  iat?: number
+}
+
+export function parseJwtPayload(token: string): TokenPayload | null {
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(
+      atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+    )
+    return JSON.parse(jsonPayload)
+  } catch {
+    return null
+  }
+}
+
+export function isTokenExpired(token: string | null): boolean {
+  if (!token) return true
+  const payload = parseJwtPayload(token)
+  if (!payload || !payload.exp) return true
+  // 提前 5 分钟视为过期（容错）
+  return (payload.exp * 1000) < (Date.now() + 5 * 60 * 1000)
+}
+
 export const useAuthStore = () => {
   const isLoggedIn = computed(() => !!state.token)
 
