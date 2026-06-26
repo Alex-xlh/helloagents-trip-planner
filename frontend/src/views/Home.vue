@@ -27,6 +27,7 @@
 
     <a-card class="form-card" :bordered="false">
       <a-form
+        ref="formRef"
         :model="formData"
         layout="vertical"
         @finish="handleSubmit"
@@ -137,15 +138,22 @@
                 <template #label>
                   <span class="form-label">旅行偏好</span>
                 </template>
-                <div class="preference-tags">
-                  <a-checkbox-group v-model:value="formData.preferences" class="custom-checkbox-group">
-                    <a-checkbox value="历史文化" class="preference-tag">历史文化</a-checkbox>
-                    <a-checkbox value="自然风光" class="preference-tag">自然风光</a-checkbox>
-                    <a-checkbox value="美食" class="preference-tag">特色美食</a-checkbox>
-                    <a-checkbox value="购物" class="preference-tag">高端购物</a-checkbox>
-                    <a-checkbox value="艺术" class="preference-tag">艺术看展</a-checkbox>
-                    <a-checkbox value="休闲" class="preference-tag">沉浸休闲</a-checkbox>
-                  </a-checkbox-group>
+                <div class="customCheckBoxHolder">
+                  <template v-for="(item, index) in [
+                    { value: '历史文化', label: '历史文化' },
+                    { value: '自然风光', label: '自然风光' },
+                    { value: '美食', label: '特色美食' },
+                    { value: '购物', label: '高端购物' },
+                    { value: '艺术', label: '艺术看展' },
+                    { value: '休闲', label: '沉浸休闲' }
+                  ]" :key="item.value">
+                    <input type="checkbox" :id="'pref-' + index" :value="item.value" v-model="formData.preferences" class="customCheckBoxInput">
+                    <label :for="'pref-' + index" class="customCheckBoxWrapper">
+                        <div class="customCheckBox">
+                            <div class="inner">{{ item.label }}</div>
+                        </div>
+                    </label>
+                  </template>
                 </div>
               </a-form-item>
             </a-col>
@@ -160,34 +168,22 @@
           </div>
 
           <a-form-item name="free_text_input">
-            <a-textarea
-              v-model:value="formData.free_text_input"
+            <textarea
+              v-model="formData.free_text_input"
               placeholder="请输入您的任何额外需求，例如：需要无障碍设施、对海鲜过敏、必须安排米其林餐厅等..."
-              :rows="3"
-              size="large"
-              class="custom-textarea"
-            />
+              rows="3"
+              class="neomorphic-input"
+            ></textarea>
           </a-form-item>
         </div>
 
-        <!-- 提交按钮 -->
+        <!-- 提交按钮 (滑动解锁) -->
         <a-form-item>
-          <a-button
-            type="primary"
-            html-type="submit"
-            :loading="loading"
-            size="large"
-            block
-            class="submit-button"
-          >
-            <template v-if="!loading">
-              <span>开启定制之旅</span>
-              <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-            </template>
-            <template v-else>
-              <span>规划引擎运转中...</span>
-            </template>
-          </a-button>
+          <SlideSubmitButton 
+            ref="slideButtonRef"
+            :loading="loading" 
+            @submit="onSlideSubmit" 
+          />
         </a-form-item>
 
         <!-- 流式打字机特效区域 -->
@@ -211,6 +207,8 @@
 import { ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import type { FormInstance } from 'ant-design-vue'
+import SlideSubmitButton from '@/components/SlideSubmitButton.vue'
 import { generateTripPlanStream } from '@/services/api'
 import apiClient from '@/services/api'
 import { useAuthStore } from '@/store/auth'
@@ -222,6 +220,24 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const streamedText = ref('')
 const streamingBox = ref<HTMLElement | null>(null)
+const formRef = ref<FormInstance | null>(null)
+const slideButtonRef = ref<InstanceType<typeof SlideSubmitButton> | null>(null)
+
+const onSlideSubmit = async () => {
+  try {
+    if (formRef.value) {
+      await formRef.value.validate()
+    }
+    // 校验通过，开始走正式流程
+    await handleSubmit()
+  } catch (error) {
+    console.log('表单校验失败:', error)
+    // 校验失败（比如没填必填项），把滑块弹回去
+    if (slideButtonRef.value) {
+      slideButtonRef.value.reset()
+    }
+  }
+}
 
 const formData = reactive<Omit<TripFormData, 'start_date' | 'end_date'> & { start_date: Dayjs | null; end_date: Dayjs | null }>({
   city: '',
@@ -568,104 +584,104 @@ const handleSubmit = async () => {
   margin-right: 4px;
 }
 
-/* 偏好标签 */
-.preference-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.custom-checkbox-group {
+/* 自定义多选按钮 (Custom Checkbox) */
+.customCheckBoxHolder {
+  margin: 5px 0;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  width: 100%;
 }
 
-.custom-checkbox-group :deep(.ant-checkbox-wrapper) {
-  margin: 0 !important;
-  padding: 8px 20px;
-  border: 1px solid #E2E8F0;
-  border-radius: 30px;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  background: rgba(255, 255, 255, 0.6);
-  font-size: 14px;
+.customCheckBox {
+  width: fit-content;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 16px;
+  background-color: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
   color: #475569;
-}
-
-.custom-checkbox-group :deep(.ant-checkbox-wrapper:hover) {
-  border-color: #38BDF8;
-  background: rgba(255, 255, 255, 0.9);
-  color: #0C4A6E;
-}
-
-.custom-checkbox-group :deep(.ant-checkbox-wrapper-checked) {
-  border-color: #0EA5E9;
-  background: #0EA5E9;
-  color: white;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-}
-
-.custom-checkbox-group :deep(.ant-checkbox-inner) {
-  display: none; /* Hide default checkbox icon for pill style */
-}
-
-/* 文本域 */
-.custom-textarea :deep(.ant-input) {
-  border-radius: 16px;
-  border: 1px solid #E2E8F0;
-  background: rgba(255, 255, 255, 0.8);
-  padding: 16px;
-  transition: all 0.3s ease;
-}
-
-.custom-textarea :deep(.ant-input:hover) {
-  border-color: #38BDF8;
-}
-
-.custom-textarea :deep(.ant-input:focus) {
-  border-color: #0EA5E9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
-  background: #ffffff;
-}
-
-/* CTA 提交按钮 */
-.submit-button {
-  height: 64px;
-  border-radius: 32px;
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: 1px;
-  background: #F97316; /* CTA Orange */
-  border: none;
-  box-shadow: 0 10px 25px rgba(249, 115, 22, 0.3);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-timing-function: cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition-duration: 300ms;
+  transition-property: color, background-color, box-shadow;
   display: flex;
+  height: 36px;
   align-items: center;
+  box-shadow: rgba(0, 0, 0, 0.15) 0px 2px 1px 0px inset, rgba(255, 255, 255, 0.17) 0px 1px 1px 0px;
+  outline: none;
   justify-content: center;
-  gap: 12px;
+  min-width: 60px;
 }
 
-.submit-button:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 15px 35px rgba(249, 115, 22, 0.4);
-  background: #EA580C;
+.customCheckBox:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+  box-shadow: rgba(0, 0, 0, 0.1) 0px -4px 1px 0px inset, rgba(255, 255, 255, 0.17) 0px -1px 1px 0px, rgba(0, 0, 0, 0.1) 0px 2px 4px 1px;
 }
 
-.submit-button:active {
-  transform: translateY(1px);
-  box-shadow: 0 5px 15px rgba(249, 115, 22, 0.3);
+.customCheckBox .inner {
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+  transition-timing-function: cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition-duration: 300ms;
+  transition-property: transform;
+  transform: translateY(0px);
 }
 
-.button-icon {
-  width: 20px;
-  height: 20px;
-  transition: transform 0.3s ease;
+.customCheckBox:hover .inner {
+  transform: translateY(-2px);
 }
 
-.submit-button:hover .button-icon {
-  transform: translateX(4px);
+.customCheckBoxInput {
+  display: none;
 }
+
+.customCheckBoxInput:checked + .customCheckBoxWrapper .customCheckBox {
+  background-color: #0EA5E9;
+  color: white;
+  box-shadow: rgba(0, 0, 0, 0.23) 0px -4px 1px 0px inset, rgba(255, 255, 255, 0.17) 0px -1px 1px 0px, rgba(0, 0, 0, 0.17) 0px 2px 4px 1px;
+}
+
+.customCheckBoxInput:checked + .customCheckBoxWrapper .customCheckBox .inner {
+  transform: translateY(-2px);
+}
+
+.customCheckBoxInput:checked + .customCheckBoxWrapper .customCheckBox:hover {
+  background-color: #0284c7;
+  box-shadow: rgba(0, 0, 0, 0.26) 0px -4px 1px 0px inset, rgba(255, 255, 255, 0.17) 0px -1px 1px 0px, rgba(0, 0, 0, 0.15) 0px 3px 6px 2px;
+}
+
+.customCheckBoxWrapper .customCheckBox:hover .inner {
+  transform: translateY(-2px);
+}
+
+/* 文本域 (Neomorphic Style) */
+.neomorphic-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: none;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: #ffffff; /* 纯白背景，与卡片完全融合 */
+  box-shadow: 6px 6px 16px rgba(0, 0, 0, 0.06),
+              -6px -6px 16px rgba(255, 255, 255, 1);
+  transition: all 0.3s ease;
+  color: #333;
+}
+
+.neomorphic-input:focus {
+  outline: none;
+  background: #ffffff;
+  box-shadow: inset 6px 6px 12px rgba(0, 0, 0, 0.06),
+              inset -6px -6px 12px rgba(255, 255, 255, 1);
+}
+
+/* 按钮已替换为组件 SlideSubmitButton.vue，下面保留原样式防止报错，但不再使用 */
 
 /* 加载状态 */
 .loading-container {
@@ -729,10 +745,12 @@ const handleSubmit = async () => {
   font-size: 15px;
   line-height: 1.8;
   white-space: pre-wrap;
-  min-height: 100px;
-  max-height: 300px;
+  min-height: 150px;
+  height: 250px;
+  max-height: 800px;
+  resize: vertical;
   overflow-y: auto;
-  padding: 8px;
+  padding: 12px;
 }
 
 .streaming-content::-webkit-scrollbar {

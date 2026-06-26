@@ -109,12 +109,15 @@ class MultiAgentTripPlanner:
             print(f"天数: {request.travel_days}天")
             print(f"{'='*60}\n")
 
+            log_queue = asyncio.Queue()
+
             # === 定义后台计算任务 ===
             async def fetch_and_plan():
                 import time
                 
                 # --- A. 意图解析 (Router Agent) ---
                 print("🧠 [Router Agent] 开始极速解析意图...")
+                await log_queue.put("\n\n🔍 **[需求解析]** 正在精准提取您的出行偏好与定制需求...")
                 router_start = time.time()
                 prefs_joined = " ".join(request.preferences) if request.preferences else "无特殊偏好"
                 extra_reqs = request.free_text_input if request.free_text_input else "无"
@@ -132,25 +135,18 @@ class MultiAgentTripPlanner:
                 router_end = time.time()
                 print(f"⏱️ [Router Agent] 意图解析耗时: {router_end - router_start:.2f} 秒. 提取结果: {intent_data}")
 
+                await log_queue.put("\n\n🌐 **[数据检索]** 正在并发调取高德地图实时数据（景区 / 天气 / 酒店）...")
+
                 # --- B. 数据抓取 (Python Script) ---
                 async def fetch_attractions():
                     start_t = time.time()
-                    
-                    # 1. 抓取基础推荐标签 (直接使用用户的 preferences)
                     tags_str = " ".join(request.preferences) if request.preferences else "著名景点"
-                    
-                    # 使用 asyncio.gather 并发抓取“偏好推荐”和“必去清单”
                     tasks = [amap_maps_text_search.ainvoke({"keywords": tags_str, "city": request.city})]
-                    
-                    # 2. 对每个必去地点额外派发抓取任务，确保绝对命中
                     must_visits = intent_data.get("must_fetch_pois", [])
                     for mv in must_visits:
                         tasks.append(amap_maps_text_search.ainvoke({"keywords": mv, "city": request.city}))
-                    
                     results = await asyncio.gather(*tasks)
-                    # 简单拼接所有返回内容
                     combined_res = "\n\n".join(results)
-                    
                     end_t = time.time()
                     print(f"⏱️ [Attraction Tool] 景点直调抓取耗时: {end_t - start_t:.2f} 秒 (包含必去清单)")
                     return combined_res
@@ -179,16 +175,16 @@ class MultiAgentTripPlanner:
                 )
                 gather_end = time.time()
                 print(f"🔥 [并发总耗时] 3大前置 Agent 执行完毕共计耗时: {gather_end - gather_start:.2f} 秒")
+                await log_queue.put("\n\n✅ **[数据就绪]** 目的地环境与配套数据加载完成。")
 
                 # --- C. 行程规划 (Planner Agent) ---
-                # 核心排版 LLM
+                await log_queue.put("\n\n🧠 **[核心规划]** 核心引擎已接管，正在为您进行智能路线编排与预算核算...")
                 parser = PydanticOutputParser(pydantic_object=TripPlan)
                 prompt_planner = ChatPromptTemplate.from_template(
                     PLANNER_AGENT_PROMPT + "\n\n{format_instructions}"
                 )
                 planner_chain = prompt_planner | self.llm | parser
 
-                # 把原始附加条件完整传给 planner
                 print(f"🧠 [Planner Agent] 开始执行最终规划...")
                 planner_start = time.time()
                 trip_plan = await planner_chain.ainvoke({
@@ -207,9 +203,11 @@ class MultiAgentTripPlanner:
                 })
                 planner_end = time.time()
                 print(f"🎯 [Planner Agent] 最终行程规划生成耗时: {planner_end - planner_start:.2f} 秒")
+                
+                await log_queue.put(None) # 终结信号
                 return trip_plan
 
-            # 🚀 1. 立即启动后台繁重的计算任务 (不 await, 扔到后台去跑)
+            # 🚀 1. 立即启动后台繁重的计算任务
             planner_task = asyncio.create_task(fetch_and_plan())
 
             # 🚀 2. 立即在前台触发 Greeting Agent，直接开始打字机
@@ -217,8 +215,16 @@ class MultiAgentTripPlanner:
                 if chunk.content:
                     yield chunk.content
             
-            # 🚀 3. 打字机打完了，此时静静等待后台任务（其实大部分时候后台已经跑完了，实现了零感知等待）
-            yield "\n\n*(高德数据已就绪，正在生成精美行程单...)*\n\n"
+            # 🚀 3. 打字机打完了，开始从队列中接力输出后台日志
+            while True:
+                msg = await log_queue.get()
+                if msg is None:
+                    break
+                # 将后台状态输出给前端
+                yield msg
+                await asyncio.sleep(0.1) # 稍微停顿一下更有真实感
+            
+            yield "\n\n*(一切准备就绪，正在生成精美行程单...)*\n\n"
             trip_plan = await planner_task
             
             # 🚀 4. 将结果包裹成前端需要的 JSON 格式吐出，触发前端跳转
