@@ -17,7 +17,7 @@ class TripRequest(BaseModel):
     accommodation: str = Field(..., description="住宿偏好", example="经济型酒店")
     preferences: List[str] = Field(default=[], description="旅行偏好标签", example=["历史文化", "美食"])
     free_text_input: Optional[str] = Field(default="", description="额外要求", example="希望多安排一些博物馆")
-    
+    #测试数据
     class Config:
         json_schema_extra = {
             "example": {
@@ -51,11 +51,7 @@ class Attraction(BaseModel):
     location: Location = Field(..., description="经纬度坐标")
     visit_duration: int = Field(..., description="建议游览时间(分钟)")
     description: str = Field(..., description="景点描述")
-    category: Optional[str] = Field(default="景点", description="景点类别")
     rating: Optional[float] = Field(default=None, description="评分")
-    photos: Optional[List[str]] = Field(default_factory=list, description="景点图片URL列表")
-    poi_id: Optional[str] = Field(default="", description="POI ID")
-    image_url: Optional[str] = Field(default=None, description="图片URL")
     ticket_price: int = Field(default=0, description="门票价格(元)")
 
 
@@ -63,22 +59,17 @@ class Meal(BaseModel):
     """餐饮信息"""
     type: str = Field(..., description="餐饮类型: breakfast/lunch/dinner/snack")
     name: str = Field(..., description="餐饮名称")
-    address: Optional[str] = Field(default=None, description="地址")
-    location: Optional[Location] = Field(default=None, description="经纬度坐标")
     description: Optional[str] = Field(default=None, description="描述")
-    estimated_cost: int = Field(default=0, description="预估费用(元)")
 
 
 class Hotel(BaseModel):
     """酒店信息"""
     name: str = Field(..., description="酒店名称")
     address: str = Field(default="", description="酒店地址")
-    location: Optional[Location] = Field(default=None, description="酒店位置")
     price_range: str = Field(default="", description="价格范围")
     rating: str = Field(default="", description="评分")
     distance: str = Field(default="", description="距离景点距离")
     type: str = Field(default="", description="酒店类型")
-    estimated_cost: int = Field(default=0, description="预估费用(元/晚)")
 
 
 class DayPlan(BaseModel):

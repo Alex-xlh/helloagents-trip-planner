@@ -11,30 +11,23 @@ export interface Attraction {
   location: Location
   visit_duration: number
   description: string
-  category?: string
   rating?: number
-  image_url?: string
   ticket_price?: number
 }
 
 export interface Meal {
   type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
   name: string
-  address?: string
-  location?: Location
   description?: string
-  estimated_cost?: number
 }
 
 export interface Hotel {
   name: string
   address: string
-  location?: Location
   price_range: string
   rating: string
   distance: string
   type: string
-  estimated_cost?: number
 }
 
 export interface Budget {

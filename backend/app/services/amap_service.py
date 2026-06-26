@@ -13,13 +13,14 @@ from mcp.client.session import ClientSession
 _mcp_pool = None
 _mcp_pool_initialized = False
 _mcp_exit_stack = contextlib.AsyncExitStack()
+#并发防盗锁
 _mcp_init_lock = asyncio.Lock()
 
 async def init_mcp_client():
     """初始化全局MCP客户端并发连接池并保持长连接"""
     global _mcp_pool, _mcp_pool_initialized
     
-    # 第一次检查（无锁快速返回）
+    # 第一次检查（无锁快速返回）防御性编程
     if _mcp_pool_initialized:
         return
         
@@ -30,43 +31,43 @@ async def init_mcp_client():
             
         print("🔄 正在初始化 MCP 并发连接池 (容量: 3)...")
         settings = get_settings()
-    if not settings.amap_api_key:
-        raise ValueError("高德地图API Key未配置,请在.env文件中设置AMAP_API_KEY")
-        
-    env = os.environ.copy()
-    env["AMAP_MAPS_API_KEY"] = settings.amap_api_key
+        if not settings.amap_api_key:
+            raise ValueError("高德地图API Key未配置,请在.env文件中设置AMAP_API_KEY")
+            
+        env = os.environ.copy()
+        env["AMAP_MAPS_API_KEY"] = settings.amap_api_key
 
-    command_name = "uvx.exe" if os.name == 'nt' else "uvx"
-    server_params = StdioServerParameters(
-        command=command_name,
-        args=["--offline", "amap-mcp-server"],
-        env=env
-    )
-    
-    try:
-        _mcp_pool = asyncio.Queue()
-        POOL_SIZE = 3
+        command_name = "uvx.exe" if os.name == 'nt' else "uvx"
+        server_params = StdioServerParameters(
+            command=command_name,
+            args=["--offline", "amap-mcp-server"],
+            env=env
+        )
         
-        for i in range(POOL_SIZE):
-            print(f"  - 正在启动 Node.js MCP 进程 {i+1}/{POOL_SIZE} ...")
-            # 建立持久化的进程和管道上下文
-            transport = await _mcp_exit_stack.enter_async_context(stdio_client(server_params))
-            read, write = transport
+        try:
+            _mcp_pool = asyncio.Queue()
+            POOL_SIZE = 3
             
-            # 建立持久化的Session会话上下文
-            session = await _mcp_exit_stack.enter_async_context(ClientSession(read, write))
-            await session.initialize()
-            
-            # 放入连接池
-            await _mcp_pool.put(session)
-            
-        _mcp_pool_initialized = True
-        print("✅ MCP 并发连接池拉起成功！(彻底消除单通道死锁，实现物理并发)")
-    except Exception as e:
-        print(f"❌ 初始化 MCP 长连接池失败: {e}")
-        await _mcp_exit_stack.aclose()
-        _mcp_pool_initialized = False
-        raise
+            for i in range(POOL_SIZE):
+                print(f"  - 正在启动 Node.js MCP 进程 {i+1}/{POOL_SIZE} ...")
+                # 建立持久化的进程和管道上下文
+                transport = await _mcp_exit_stack.enter_async_context(stdio_client(server_params))
+                read, write = transport
+                
+                # 建立持久化的Session会话上下文
+                session = await _mcp_exit_stack.enter_async_context(ClientSession(read, write))
+                await session.initialize()
+                
+                # 放入连接池
+                await _mcp_pool.put(session)
+                
+            _mcp_pool_initialized = True
+            print("✅ MCP 并发连接池拉起成功！(彻底消除单通道死锁，实现物理并发)")
+        except Exception as e:
+            print(f"❌ 初始化 MCP 长连接池失败: {e}")
+            await _mcp_exit_stack.aclose()
+            _mcp_pool_initialized = False
+            raise
 
 async def close_mcp_client():
     """安全释放MCP长连接"""
