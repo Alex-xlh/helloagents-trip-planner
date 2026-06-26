@@ -40,7 +40,7 @@ async def init_mcp_client():
     command_name = "uvx.exe" if os.name == 'nt' else "uvx"
     server_params = StdioServerParameters(
         command=command_name,
-        args=["amap-mcp-server"],
+        args=["--offline", "amap-mcp-server"],
         env=env
     )
     

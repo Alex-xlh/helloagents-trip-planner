@@ -102,13 +102,20 @@ async def list_trips(
     items = []
     for t in trips:
         trip_data = t.trip_data or {}
+        thumbnail_url = ""
+        days = trip_data.get('days', [])
+        if days and isinstance(days, list) and len(days) > 0:
+            attractions = days[0].get('attractions', [])
+            if attractions and isinstance(attractions, list) and len(attractions) > 0:
+                thumbnail_url = attractions[0].get('image_url') or ""
+
         items.append(TripHistoryResponse(
             id=t.id,
             destination=t.destination,
             created_at=t.created_at,
-            travel_days=len(trip_data.get('days', [])),
+            travel_days=len(days),
             total_budget=trip_data.get('budget', {}).get('total', 0) if trip_data.get('budget') else 0,
-            thumbnail=trip_data.get('days', [{}])[0].get('attractions', [{}])[0].get('image_url', '') if trip_data.get('days') and trip_data.get('days')[0].get('attractions') else ''
+            thumbnail=thumbnail_url
         ))
 
     return {

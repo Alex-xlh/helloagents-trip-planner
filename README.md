@@ -119,7 +119,7 @@ echo "VITE_AMAP_WEB_KEY=your_amap_web_key" > .env
 npm run dev
 ```
 
-5. 打开浏览器访问 `http://localhost:5173`
+5. 打开浏览器访问 `http://localhost:3000`
 
 ## 📝 使用指南
 
