@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from ..config import get_settings, validate_config, print_config
-from .routes import trip, poi, map as map_routes, auth, history
+from .routes import trip, poi, auth, history
 from ..services.amap_service import init_mcp_client, close_mcp_client
 from ..core.database import engine
 from ..models.db import Base
@@ -98,7 +98,6 @@ app.add_middleware(
 # 注册路由
 app.include_router(trip.router, prefix="/api")
 app.include_router(poi.router, prefix="/api")
-app.include_router(map_routes.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 
