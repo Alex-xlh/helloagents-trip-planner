@@ -28,6 +28,7 @@ export interface Hotel {
   rating: string
   distance: string
   type: string
+  location: Location
 }
 
 export interface Budget {

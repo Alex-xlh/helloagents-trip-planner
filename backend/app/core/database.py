@@ -1,15 +1,14 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from ..config import get_settings
 
-# 数据库文件保存在根目录下
-SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./trips.db"
+settings = get_settings()
+SQLALCHEMY_DATABASE_URL = settings.database_url
 
 # 创建异步引擎
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL, 
-    echo=False, 
-    # check_same_thread=False is needed only for SQLite
-    connect_args={"check_same_thread": False}
+    echo=False
 )
 
 # 创建异步会话工厂

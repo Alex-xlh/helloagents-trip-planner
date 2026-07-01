@@ -894,24 +894,22 @@ const addAttractionMarkers = (AMap: any) => {
     })
   })
 
-  // 创建标记
+  // 绘制景点标记
   allAttractions.forEach((attraction, index) => {
-    // 强制转换为 Number 防止由于字符串导致的神秘偏差
     const lng = Number(attraction.location.longitude)
     const lat = Number(attraction.location.latitude)
     
     const marker = new AMap.Marker({
       position: [lng, lat],
       title: attraction.name,
-      anchor: 'bottom-center', // 确保图标的针尖死死对齐真实坐标
+      anchor: 'bottom-center',
       label: {
         content: `<div style="background: #4CAF50; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${index + 1}</div>`,
-        direction: 'top', // 强制将 label 置于图标正上方
+        direction: 'top',
         offset: new AMap.Pixel(0, 0)
       }
     })
 
-    // 创建信息窗口
     const infoWindow = new AMap.InfoWindow({
       content: `
         <div style="padding: 10px;">
@@ -925,12 +923,49 @@ const addAttractionMarkers = (AMap: any) => {
       offset: new AMap.Pixel(0, -30)
     })
 
-    // 点击标记显示信息窗口
     marker.on('click', () => {
       infoWindow.open(map, marker.getPosition())
     })
 
     markers.push(marker)
+  })
+
+  // 收集并绘制酒店标记
+  tripPlan.value.days.forEach((day, dayIndex) => {
+    if (day.hotel && day.hotel.location && day.hotel.location.longitude && day.hotel.location.latitude) {
+      const lng = Number(day.hotel.location.longitude)
+      const lat = Number(day.hotel.location.latitude)
+      
+      const marker = new AMap.Marker({
+        position: [lng, lat],
+        title: day.hotel.name,
+        anchor: 'bottom-center',
+        label: {
+          content: `<div style="background: #8B5CF6; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-weight: bold;">🏨 酒店</div>`,
+          direction: 'top',
+          offset: new AMap.Pixel(0, 0)
+        }
+      })
+
+      const infoWindow = new AMap.InfoWindow({
+        content: `
+          <div style="padding: 10px;">
+            <h4 style="margin: 0 0 8px 0;">${day.hotel.name}</h4>
+            <p style="margin: 4px 0;"><strong>地址:</strong> ${day.hotel.address}</p>
+            <p style="margin: 4px 0;"><strong>类型:</strong> ${day.hotel.type || '酒店'}</p>
+            <p style="margin: 4px 0;"><strong>评分:</strong> ${day.hotel.rating}</p>
+            <p style="margin: 4px 0; color: #8B5CF6;"><strong>第${dayIndex + 1}天 住宿</strong></p>
+          </div>
+        `,
+        offset: new AMap.Pixel(0, -30)
+      })
+
+      marker.on('click', () => {
+        infoWindow.open(map, marker.getPosition())
+      })
+
+      markers.push(marker)
+    }
   })
 
   // 添加标记到地图

@@ -70,6 +70,7 @@ class Hotel(BaseModel):
     rating: str = Field(default="", description="评分")
     distance: str = Field(default="", description="距离景点距离")
     type: str = Field(default="", description="酒店类型")
+    location: Location = Field(..., description="经纬度坐标")
 
 
 class DayPlan(BaseModel):
