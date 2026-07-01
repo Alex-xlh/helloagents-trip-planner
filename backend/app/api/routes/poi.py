@@ -2,8 +2,11 @@
 
 from fastapi import APIRouter, HTTPException
 from typing import Optional
+from ...config import get_settings
+from ...core.http_client import get_http_client
 
 router = APIRouter(prefix="/poi", tags=["POI"])
+settings = get_settings()
 
 
 @router.get(
@@ -23,10 +26,6 @@ async def get_attraction_photo(name: str, city: Optional[str] = None):
         图片URL
     """
     try:
-        from ...config import get_settings
-        import httpx
-        
-        settings = get_settings()
         api_key = settings.amap_api_key
         
         photo_url = None
@@ -44,20 +43,21 @@ async def get_attraction_photo(name: str, city: Optional[str] = None):
             if city:
                 params["city"] = city
             
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("status") == "1" and data.get("pois"):
-                        # 遍历前5个POI，寻找任何一个带有图片的POI
-                        for poi in data["pois"]:
-                            photos = poi.get("photos", [])
-                            if photos and isinstance(photos, list) and len(photos) > 0:
-                                # 过滤掉不存在的或空的URL
-                                valid_photos = [p for p in photos if isinstance(p, dict) and p.get("url")]
-                                if valid_photos:
-                                    photo_url = valid_photos[0]["url"]
-                                    break # 找到第一张有效的图片就立刻跳出循环
+            client = get_http_client()
+            response = await client.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "1" and data.get("pois"):
+                    # 遍历前5个POI，寻找任何一个带有图片的POI
+                    for poi in data["pois"]:
+                        photos = poi.get("photos", [])
+                        if photos and isinstance(photos, list) and len(photos) > 0:
+                            # 过滤掉不存在的或空的URL
+                            valid_photos = [p for p in photos if isinstance(p, dict) and p.get("url")]
+                            if valid_photos:
+                                photo_url = valid_photos[0]["url"]
+                                break # 找到第一张有效的图片就立刻跳出循环
+
 
         return {
             "success": True,

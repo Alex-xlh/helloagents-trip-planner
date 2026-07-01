@@ -129,7 +129,7 @@ async def _call_mcp_tool_async(tool_name: str, arguments: dict) -> str:
 from langchain_core.tools import tool
 
 @tool
-async def amap_maps_text_search(keywords: str, city: str) -> str:
+async def amap_maps_text_search(keywords: str, city: str, limit: int = 30) -> str:
     """根据关键词和城市搜索高德地图上的景点或酒店(POI)。返回相关信息的文本描述。"""
     raw_result = await _call_mcp_tool_async("maps_text_search", {"keywords": keywords, "city": city, "citylimit": "true"})
     
@@ -143,8 +143,8 @@ async def amap_maps_text_search(keywords: str, city: str) -> str:
             pois = data.get("pois", [])
             cleaned_pois = []
             
-            # 扩大截断上限，保留前30条数据，为长途旅行提供充足弹药
-            for p in pois[:30]:
+            # 根据传入的 limit 动态截断数据，防止精准搜索时 Token 爆炸
+            for p in pois[:limit]:
                 biz_ext = p.get("biz_ext", {})
                 
                 # 提取评分和价格

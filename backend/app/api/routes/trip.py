@@ -21,6 +21,14 @@ router = APIRouter(prefix="/trip", tags=["旅行规划"])
 async def plan_trip_stream_route(request: TripRequest):
     """
     流式生成旅行计划 (Server-Sent Events / 文本流)
+    
+    TODO: 🚨【严重财务安全漏洞】🚨
+    当前大模型生成接口处于“裸奔”状态。恶意用户可以通过写脚本死循环调用此接口，瞬间耗尽 DeepSeek/OpenAI 账户余额。
+    建议在上线前务必补充 slowapi 限流器。
+    修复方案示例：
+    1. import: from fastapi import Request
+    2. 加装饰器: @limiter.limit("5/minute")
+    3. 改参数: async def plan_trip_stream_route(http_req: Request, request: TripRequest):
     """
     try:
         print(f"\n{'='*60}")

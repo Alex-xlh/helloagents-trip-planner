@@ -108,7 +108,7 @@ class MultiAgentTripPlanner:
             print(f"目的地: {request.city}")
             print(f"天数: {request.travel_days}天")
             print(f"{'='*60}\n")
-
+            #异步信箱：用于将后台任务状态异步传递给前端
             log_queue = asyncio.Queue()
 
             # === 定义后台计算任务 ===
@@ -119,6 +119,7 @@ class MultiAgentTripPlanner:
                 print("🧠 [Router Agent] 开始极速解析意图...")
                 await log_queue.put("\n\n🔍 **[需求解析]** 正在精准提取您的出行偏好与定制需求...")
                 router_start = time.time()
+                #对前端参数做安全清洗
                 prefs_joined = " ".join(request.preferences) if request.preferences else "无特殊偏好"
                 extra_reqs = request.free_text_input if request.free_text_input else "无"
                 try:
@@ -141,10 +142,16 @@ class MultiAgentTripPlanner:
                 async def fetch_attractions():
                     start_t = time.time()
                     tags_str = " ".join(request.preferences) if request.preferences else "著名景点"
-                    tasks = [amap_maps_text_search.ainvoke({"keywords": tags_str, "city": request.city})]
+                    tasks = [amap_maps_text_search.ainvoke({"keywords": tags_str, "city": request.city, "limit": 30})]
                     must_visits = intent_data.get("must_fetch_pois", [])
                     for mv in must_visits:
-                        tasks.append(amap_maps_text_search.ainvoke({"keywords": mv, "city": request.city}))
+                        tasks.append(amap_maps_text_search.ainvoke({"keywords": mv, "city": request.city, "limit": 3}))
+                    
+                    # 💡 【高并发与容量提示】
+                    # asyncio.gather 实现了真正的物理级并发。它会瞬间将上述所有的 tasks 推向底层的 MCP 长连接池。
+                    # 如果未来系统并发量暴涨（比如几百人同时在线规划），请前往 backend/app/services/amap_service.py 
+                    # 中的 init_mcp_client() 处，将常驻的 MCP Node.js 进程数量从 3 提升到更高，
+                    # 并在 .env 中配置相应的环境变量（需结合服务器内存大小权衡）。
                     results = await asyncio.gather(*tasks)
                     combined_res = "\n\n".join(results)
                     end_t = time.time()
@@ -161,7 +168,7 @@ class MultiAgentTripPlanner:
                 async def fetch_hotels():
                     start_t = time.time()
                     hotel_keywords = f"{request.accommodation} 酒店"
-                    res = await amap_maps_text_search.ainvoke({"keywords": hotel_keywords, "city": request.city})
+                    res = await amap_maps_text_search.ainvoke({"keywords": hotel_keywords, "city": request.city, "limit": 20})
                     end_t = time.time()
                     print(f"⏱️ [Hotel Tool] 酒店直调搜索耗时: {end_t - start_t:.2f} 秒")
                     return res

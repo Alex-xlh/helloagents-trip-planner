@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from ..config import get_settings, validate_config, print_config
 from .routes import trip, poi, auth, history
 from ..services.amap_service import init_mcp_client, close_mcp_client
+from ..core.http_client import init_http_client, close_http_client
 from ..core.database import engine
 from ..models.db import Base
 from slowapi import _rate_limit_exceeded_handler
@@ -46,6 +47,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[WARN] MCP长连接池初始化失败，将降级为请求时初始化: {e}")
         
+    # 初始化全局 HTTP 连接池
+    try:
+        await init_http_client()
+    except Exception as e:
+        print(f"[ERROR] HTTP 连接池初始化失败: {e}")
+        
     # 初始化数据库
     try:
         async with engine.begin() as conn:
@@ -67,6 +74,12 @@ async def lifespan(app: FastAPI):
         await close_mcp_client()
     except Exception as e:
         print(f"[WARN] 释放MCP长连接资源失败: {e}")
+
+    # 释放全局 HTTP 连接池
+    try:
+        await close_http_client()
+    except Exception as e:
+        print(f"[WARN] 释放HTTP长连接资源失败: {e}")
 
 # 创建FastAPI应用
 app = FastAPI(
