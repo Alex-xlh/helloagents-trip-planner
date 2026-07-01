@@ -842,7 +842,7 @@ const initMap = async () => {
     const AMap = await AMapLoader.load({
       key: import.meta.env.VITE_AMAP_JS_KEY || '', // 高德地图前端 Web JS API Key
       version: '2.0',
-      plugins: ['AMap.Marker', 'AMap.Polyline', 'AMap.InfoWindow', 'AMap.MoveAnimation']
+      plugins: ['AMap.Marker', 'AMap.Polyline', 'AMap.InfoWindow', 'AMap.MoveAnimation', 'AMap.ControlBar']
     })
 
     // 创建地图实例
@@ -850,11 +850,19 @@ const initMap = async () => {
       zoom: 12,
       center: [116.397128, 39.916527], // 默认中心点(北京)
       viewMode: '3D', // 开启 3D 模式
-      pitch: 60, // 俯仰角，打造震撼的 3D 纵深感
+      pitch: 65, // 俯仰角，打造震撼的 3D 纵深感
       rotation: -15, // 旋转角度，让城市街区斜向呈现
       showBuildingBlock: true, // 显示 3D 建筑体
-      mapStyle: 'amap://styles/macaron' // 可选：更清新的地图主题
+      mapStyle: 'amap://styles/normal' // 恢复原生真实风
     })
+
+    // 添加 3D 罗盘控制器
+    map.addControl(new AMap.ControlBar({
+      position: {
+        right: '10px',
+        top: '10px'
+      }
+    }))
 
     // 添加景点标记
     addAttractionMarkers(AMap)
@@ -978,16 +986,21 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
     })
     map.add(polyline)
 
-    // 创建巡航飞机图标 (SVG 矢量)
+    // 创建高级导航箭头 (带白边与光晕)
     const airplaneSvg = `
-      <svg viewBox="0 0 1024 1024" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
-        <path d="M512 0L240.2 384l-208 0c-17.6 0-32.2 14.2-32.2 31.8 0 10.6 5.4 20.6 14.4 26.6l243.6 153.8-31 294.6c-1.6 16.4 8.6 31.4 24.6 35.8 4 1.2 8.4 1.2 12.6 0l248.4-100 248.4 100c4.2 1.2 8.6 1.2 12.6 0 16-4.4 26.2-19.4 24.6-35.8l-31-294.6L1009.6 443c9-6 14.4-16 14.4-26.6 0-17.6-14.6-31.8-32.2-31.8l-208 0L512 0z" fill="${color}"/>
+      <svg viewBox="0 0 32 32" width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="glow">
+            <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="${color}" flood-opacity="0.8"/>
+          </filter>
+        </defs>
+        <path d="M16 4 L6 26 L16 21 L26 26 Z" fill="${color}" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" filter="url(#glow)"/>
       </svg>
     `
     const airplaneIcon = new AMap.Icon({
-      size: new AMap.Size(30, 30),
+      size: new AMap.Size(40, 40),
       image: 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(airplaneSvg))),
-      imageSize: new AMap.Size(30, 30)
+      imageSize: new AMap.Size(40, 40)
     })
 
     // 创建巡航动画 Marker
@@ -995,7 +1008,7 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
       map: map,
       position: path[0],
       icon: airplaneIcon,
-      offset: new AMap.Pixel(-15, -15)
+      offset: new AMap.Pixel(-20, -20)
     })
 
     // 延迟逐天启动动画，产生视觉连续性
