@@ -168,12 +168,30 @@
           </div>
 
           <a-form-item name="free_text_input">
-            <textarea
-              v-model="formData.free_text_input"
-              placeholder="请输入您的任何额外需求，例如：需要无障碍设施、对海鲜过敏、必须安排米其林餐厅等..."
-              rows="3"
-              class="neomorphic-input"
-            ></textarea>
+            <div class="textarea-wrapper">
+              <textarea
+                v-model="formData.free_text_input"
+                placeholder="请输入您的任何额外需求，例如：需要无障碍设施、对海鲜过敏、必须安排米其林餐厅等..."
+                rows="4"
+                class="neomorphic-input with-mic"
+              ></textarea>
+              
+              <!-- 嵌入式语音输入按钮 -->
+              <div 
+                class="inline-mic-button" 
+                :class="{'is-listening': isListening}" 
+                @click="toggleListening"
+                title="点击说话"
+              >
+                <div class="mic-glow"></div>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="23"></line>
+                  <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+              </div>
+            </div>
           </a-form-item>
         </div>
 
@@ -204,7 +222,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { FormInstance } from 'ant-design-vue'
@@ -222,6 +240,71 @@ const streamedText = ref('')
 const streamingBox = ref<HTMLElement | null>(null)
 const formRef = ref<FormInstance | null>(null)
 const slideButtonRef = ref<InstanceType<typeof SlideSubmitButton> | null>(null)
+
+// --- ASR (Speech-to-Text) 语音拾取 ---
+const isListening = ref(false)
+let recognition: any = null
+
+onMounted(() => {
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition()
+    recognition.lang = 'zh-CN'
+    recognition.continuous = true
+    recognition.interimResults = true
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = ''
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript
+        }
+      }
+      if (finalTranscript) {
+        // 追加到特殊要求文本框
+        formData.free_text_input += (formData.free_text_input ? '，' : '') + finalTranscript
+      }
+    }
+    
+    recognition.onerror = (e: any) => {
+      console.error('语音识别错误', e)
+      isListening.value = false
+    }
+    
+    recognition.onend = () => {
+      isListening.value = false
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (recognition) {
+    recognition.stop()
+  }
+})
+
+const toggleListening = () => {
+  if (!recognition) {
+    message.warning('您的浏览器不支持语音识别(推荐使用 Chrome/Edge)')
+    return
+  }
+  if (isListening.value) {
+    try {
+      recognition.stop()
+    } catch(e) {}
+    isListening.value = false // 立即强制结束状态
+  } else {
+    try {
+      recognition.start()
+      isListening.value = true
+      message.info('正在聆听，请说出您的需求...')
+    } catch (e) {
+      console.error('启动识别失败:', e)
+      try { recognition.stop() } catch(err) {}
+      isListening.value = false
+    }
+  }
+}
 
 const onSlideSubmit = async () => {
   try {
@@ -787,5 +870,81 @@ const handleSubmit = async () => {
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(40px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* 文本域包裹器 */
+.textarea-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.neomorphic-input.with-mic {
+  padding-right: 60px; /* 给右下角的按钮留出空间 */
+}
+
+/* 嵌入式语音输入按钮 */
+.inline-mic-button {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(14, 165, 233, 0.05);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 10;
+  color: #0EA5E9;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.inline-mic-button:hover {
+  background: rgba(14, 165, 233, 0.15);
+  transform: scale(1.05);
+}
+
+.inline-mic-button svg {
+  width: 22px;
+  height: 22px;
+  position: relative;
+  z-index: 2;
+}
+
+.inline-mic-button .mic-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244,63,94,0.8) 0%, rgba(244,63,94,0) 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+.inline-mic-button.is-listening {
+  background: rgba(244, 63, 94, 0.1);
+  color: #F43F5E;
+  animation: pulseInline 1.5s infinite;
+}
+
+.inline-mic-button.is-listening .mic-glow {
+  opacity: 1;
+  animation: glowPulse 1.5s infinite;
+}
+
+@keyframes pulseInline {
+  0% { transform: scale(1); box-shadow: 0 0 10px rgba(244, 63, 94, 0.2); }
+  50% { transform: scale(1.1); box-shadow: 0 0 20px rgba(244, 63, 94, 0.4); }
+  100% { transform: scale(1); box-shadow: 0 0 10px rgba(244, 63, 94, 0.2); }
+}
+
+@keyframes glowPulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
 }
 </style>
