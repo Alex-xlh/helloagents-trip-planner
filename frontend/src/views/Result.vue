@@ -439,9 +439,10 @@ const loadAttractionPhotos = async () => {
 
   const promises: Promise<void>[] = []
 
+  const city = tripPlan.value.city
   tripPlan.value.days.forEach(day => {
     day.attractions.forEach(attraction => {
-      const promise = apiClient.get(`/api/poi/photo?name=${encodeURIComponent(attraction.name)}&city=${encodeURIComponent(tripPlan.value.city)}`)
+      const promise = apiClient.get(`/api/poi/photo?name=${encodeURIComponent(attraction.name)}&city=${encodeURIComponent(city)}`)
         .then(res => {
           const data = res.data
           if (data.success && data.data.photo_url) {
@@ -841,14 +842,18 @@ const initMap = async () => {
     const AMap = await AMapLoader.load({
       key: import.meta.env.VITE_AMAP_JS_KEY || '', // 高德地图前端 Web JS API Key
       version: '2.0',
-      plugins: ['AMap.Marker', 'AMap.Polyline', 'AMap.InfoWindow']
+      plugins: ['AMap.Marker', 'AMap.Polyline', 'AMap.InfoWindow', 'AMap.MoveAnimation']
     })
 
     // 创建地图实例
     map = new AMap.Map('amap-container', {
       zoom: 12,
       center: [116.397128, 39.916527], // 默认中心点(北京)
-      viewMode: '3D'
+      viewMode: '3D', // 开启 3D 模式
+      pitch: 60, // 俯仰角，打造震撼的 3D 纵深感
+      rotation: -15, // 旋转角度，让城市街区斜向呈现
+      showBuildingBlock: true, // 显示 3D 建筑体
+      mapStyle: 'amap://styles/macaron' // 可选：更清新的地图主题
     })
 
     // 添加景点标记
@@ -883,12 +888,18 @@ const addAttractionMarkers = (AMap: any) => {
 
   // 创建标记
   allAttractions.forEach((attraction, index) => {
+    // 强制转换为 Number 防止由于字符串导致的神秘偏差
+    const lng = Number(attraction.location.longitude)
+    const lat = Number(attraction.location.latitude)
+    
     const marker = new AMap.Marker({
-      position: [attraction.location.longitude, attraction.location.latitude],
+      position: [lng, lat],
       title: attraction.name,
+      anchor: 'bottom-center', // 确保图标的针尖死死对齐真实坐标
       label: {
-        content: `<div style="background: #4CAF50; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${index + 1}</div>`,
-        offset: new AMap.Pixel(0, -30)
+        content: `<div style="background: #4CAF50; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${index + 1}</div>`,
+        direction: 'top', // 强制将 label 置于图标正上方
+        offset: new AMap.Pixel(0, 0)
       }
     })
 
@@ -926,6 +937,9 @@ const addAttractionMarkers = (AMap: any) => {
   drawRoutes(AMap, allAttractions)
 }
 
+// 定义一组鲜艳的颜色用于区分不同天数
+const dayColors = ['#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6']
+
 // 绘制路线
 const drawRoutes = (AMap: any, attractions: any[]) => {
   if (attractions.length < 2) return
@@ -939,25 +953,75 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
     dayGroups[attr.dayIndex].push(attr)
   })
 
-  // 为每天的景点绘制路线
-  Object.values(dayGroups).forEach((dayAttractions: any) => {
+  // 为每天的景点绘制路线和飞行动画
+  Object.keys(dayGroups).forEach((dayIndexStr: string, idx: number) => {
+    const dayAttractions = dayGroups[dayIndexStr]
     if (dayAttractions.length < 2) return
+    
+    const color = dayColors[idx % dayColors.length]
 
     const path = dayAttractions.map((attr: any) => [
-      attr.location.longitude,
-      attr.location.latitude
+      Number(attr.location.longitude),
+      Number(attr.location.latitude)
     ])
 
+    // 绘制静态虚线轨迹
     const polyline = new AMap.Polyline({
       path: path,
-      strokeColor: '#1890ff',
-      strokeWeight: 4,
-      strokeOpacity: 0.8,
-      strokeStyle: 'solid',
+      strokeColor: color,
+      strokeWeight: 6,
+      strokeOpacity: 0.7,
+      strokeStyle: 'dashed',
+      lineJoin: 'round',
+      lineCap: 'round',
       showDir: true // 显示方向箭头
     })
-
     map.add(polyline)
+
+    // 创建巡航飞机图标 (SVG 矢量)
+    const airplaneSvg = `
+      <svg viewBox="0 0 1024 1024" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+        <path d="M512 0L240.2 384l-208 0c-17.6 0-32.2 14.2-32.2 31.8 0 10.6 5.4 20.6 14.4 26.6l243.6 153.8-31 294.6c-1.6 16.4 8.6 31.4 24.6 35.8 4 1.2 8.4 1.2 12.6 0l248.4-100 248.4 100c4.2 1.2 8.6 1.2 12.6 0 16-4.4 26.2-19.4 24.6-35.8l-31-294.6L1009.6 443c9-6 14.4-16 14.4-26.6 0-17.6-14.6-31.8-32.2-31.8l-208 0L512 0z" fill="${color}"/>
+      </svg>
+    `
+    const airplaneIcon = new AMap.Icon({
+      size: new AMap.Size(30, 30),
+      image: 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(airplaneSvg))),
+      imageSize: new AMap.Size(30, 30)
+    })
+
+    // 创建巡航动画 Marker
+    const airplaneMarker = new AMap.Marker({
+      map: map,
+      position: path[0],
+      icon: airplaneIcon,
+      offset: new AMap.Pixel(-15, -15)
+    })
+
+    // 延迟逐天启动动画，产生视觉连续性
+    setTimeout(() => {
+      const startAnimation = () => {
+        try {
+          airplaneMarker.moveAlong(path, {
+            speed: 800, // 速度：千米/小时 (飞快点)
+            autoRotation: true // 自动计算角度
+          })
+        } catch(e) {
+          console.warn('高德地图 moveAlong 动画执行失败', e)
+        }
+      }
+
+      startAnimation()
+
+      // 监听单次飞行结束事件，停顿1秒后重置位置并重新起飞，实现完美循环
+      airplaneMarker.on('movealong', () => {
+        setTimeout(() => {
+          airplaneMarker.setPosition(path[0])
+          startAnimation()
+        }, 1000)
+      })
+
+    }, idx * 1500) // 错峰起飞
   })
 }
 </script>

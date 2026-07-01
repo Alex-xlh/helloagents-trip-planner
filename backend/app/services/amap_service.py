@@ -3,6 +3,8 @@
 import os
 import asyncio
 import contextlib
+import json
+import re
 from typing import List, Dict, Any, Optional
 from ..config import get_settings
 
@@ -127,14 +129,15 @@ async def _call_mcp_tool_async(tool_name: str, arguments: dict) -> str:
 # 导出LangChain Tools
 # ==========================================
 from langchain_core.tools import tool
+import urllib.parse
+from ..core.http_client import get_http_client
+from ..config import get_settings
 
 @tool
 async def amap_maps_text_search(keywords: str, city: str, limit: int = 30) -> str:
     """根据关键词和城市搜索高德地图上的景点或酒店(POI)。返回相关信息的文本描述。"""
     raw_result = await _call_mcp_tool_async("maps_text_search", {"keywords": keywords, "city": city, "citylimit": "true"})
     
-    import json
-    import re
     # === 数据瘦身清洗层 ===
     json_match = re.search(r'\{.*\}', raw_result, re.DOTALL)
     if json_match:
@@ -144,7 +147,32 @@ async def amap_maps_text_search(keywords: str, city: str, limit: int = 30) -> st
             cleaned_pois = []
             
             # 根据传入的 limit 动态截断数据，防止精准搜索时 Token 爆炸
-            for p in pois[:limit]:
+            pois = pois[:limit]
+            
+            settings = get_settings()
+            amap_key = settings.amap_api_key
+            http_client = get_http_client()
+
+            async def fetch_precise_location(poi_name: str, fallback_loc: str) -> str:
+                if not poi_name or not amap_key:
+                    return fallback_loc
+                try:
+                    url = f"https://restapi.amap.com/v3/place/text?keywords={urllib.parse.quote(poi_name)}&city={urllib.parse.quote(city)}&key={amap_key}"
+                    resp = await http_client.get(url, timeout=5.0)
+                    if resp.status_code == 200:
+                        api_data = resp.json()
+                        api_pois = api_data.get("pois", [])
+                        if api_pois and len(api_pois) > 0:
+                            return api_pois[0].get("location", fallback_loc)
+                except Exception as e:
+                    print(f"⚠️ 高德原生 API 坐标纠偏失败({poi_name}): {e}")
+                return fallback_loc
+
+            # 并发获取精准坐标
+            loc_tasks = [fetch_precise_location(p.get("name", ""), p.get("location", "")) for p in pois]
+            precise_locations = await asyncio.gather(*loc_tasks)
+
+            for i, p in enumerate(pois):
                 biz_ext = p.get("biz_ext", {})
                 
                 # 提取评分和价格
@@ -156,6 +184,9 @@ async def amap_maps_text_search(keywords: str, city: str, limit: int = 30) -> st
                 elif isinstance(biz_ext, list) and len(biz_ext) > 0 and isinstance(biz_ext[0], dict):
                     rating = biz_ext[0].get("rating", "暂无")
                     cost = biz_ext[0].get("cost", "暂无")
+                
+                loc_val = precise_locations[i]
+
 
                 cleaned_pois.append({
                     "名称": p.get("name", ""),
@@ -163,7 +194,7 @@ async def amap_maps_text_search(keywords: str, city: str, limit: int = 30) -> st
                     "类型": p.get("type", "").split(";")[0] if p.get("type") else "", # 仅取主类型
                     "评分": rating,
                     "价格": cost,
-                    "坐标": p.get("location", "")
+                    "坐标": loc_val
                 })
             # 返回极简JSON，禁用了ASCII以减少Unicode转义的Token开销
             return json.dumps(cleaned_pois, ensure_ascii=False)
@@ -176,9 +207,6 @@ async def amap_maps_text_search(keywords: str, city: str, limit: int = 30) -> st
 async def amap_maps_weather(city: str) -> str:
     """查询指定城市的天气信息。返回近期天气的文本描述。"""
     raw_result = await _call_mcp_tool_async("maps_weather", {"city": city})
-    
-    import json
-    import re
     # === 数据瘦身清洗层 ===
     json_match = re.search(r'\{.*\}', raw_result, re.DOTALL)
     if json_match:

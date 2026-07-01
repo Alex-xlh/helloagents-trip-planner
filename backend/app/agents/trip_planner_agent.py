@@ -52,7 +52,7 @@ PLANNER_AGENT_PROMPT = """你是高端旅行规划专家。你的任务是根据
 2. 每天必须包含早中晚三餐
 3. 每天推荐一个具体的酒店(从酒店信息中选择)
 4. 考虑景点之间的距离和交通方式
-5. **【致命纪律】景点的经纬度坐标必须真实准确！你【只能】从提供的【景点信息】和【酒店信息】列表中挑选地点。严禁自己编造任何未在列表中出现的景点或酒店名称及坐标！**
+5. **【致命纪律】景点的经纬度坐标必须完全照抄！绝对不可四舍五入或省略任何小数位数（例如 116.397128 绝对不能写成 116.39），否则将导致地图标点严重偏移！** 你【只能】从提供的【景点信息】和【酒店信息】列表中挑选地点。严禁自己编造任何未在列表中出现的景点或酒店名称及坐标！
 6. **必须包含预算信息**(门票、餐饮、住宿及总预算)
 """
 
@@ -211,6 +211,19 @@ class MultiAgentTripPlanner:
                 planner_end = time.time()
                 print(f"🎯 [Planner Agent] 最终行程规划生成耗时: {planner_end - planner_start:.2f} 秒")
                 
+                # ---- 后台诊断日志：打印大模型生成的坐标 ----
+                print("\n🧐 [Debug] 验证大模型生成的经纬度坐标是否倒置 (应为 lng, lat):")
+                if trip_plan.days and len(trip_plan.days) > 0 and len(trip_plan.days[0].attractions) > 0:
+                    attr = trip_plan.days[0].attractions[0]
+                    print(f"  > 景点 '{attr.name}' 坐标: Longitude={attr.location.longitude}, Latitude={attr.location.latitude}")
+
+                # ---- TSP 智能路线纠偏 ----
+                await log_queue.put("\n\n🗺️ **[智能纠偏]** 正在应用 TSP 算法为您进行物理防绕路地理坐标纠偏...")
+                optimize_start = time.time()
+                trip_plan = self._optimize_daily_routes(trip_plan)
+                optimize_end = time.time()
+                print(f"📍 [TSP 纠偏] 地理路线优化耗时: {optimize_end - optimize_start:.2f} 秒")
+                
                 await log_queue.put(None) # 终结信号
                 return trip_plan
 
@@ -242,6 +255,34 @@ class MultiAgentTripPlanner:
             import traceback
             traceback.print_exc()
             yield f"\n\n生成失败: {str(e)}"
+
+    def _optimize_daily_routes(self, trip_plan: TripPlan) -> TripPlan:
+        """使用贪心算法(Nearest Neighbor)对每日行程进行 TSP 智能路线纠偏"""
+        from app.utils.geo import haversine_distance
+        
+        for day in trip_plan.days:
+            attractions = day.attractions
+            if len(attractions) <= 2:
+                continue
+            
+            # 以大模型安排的第一个景点为绝对起点(尊重起始逻辑)
+            optimized_attractions = [attractions[0]]
+            remaining = attractions[1:]
+            
+            current = attractions[0]
+            while remaining:
+                # 寻找距离当前点最近的下一个景点
+                nearest = min(remaining, key=lambda x: haversine_distance(
+                    current.location.longitude, current.location.latitude,
+                    x.location.longitude, x.location.latitude
+                ))
+                optimized_attractions.append(nearest)
+                remaining.remove(nearest)
+                current = nearest
+            
+            day.attractions = optimized_attractions
+            
+        return trip_plan
 
 # 全局多智能体系统实例
 _multi_agent_planner = None
