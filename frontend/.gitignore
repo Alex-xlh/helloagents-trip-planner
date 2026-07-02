@@ -27,3 +27,9 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Live2D Assets and Core files (downloaded automatically, do not commit)
+public/shizuku/
+public/live2d.min.js
+public/live2dcubismcore.js
+public/pixi.min.js
+public/pixi-live2d-display.min.js

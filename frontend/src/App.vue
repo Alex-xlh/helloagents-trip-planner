@@ -2,11 +2,13 @@
   <div id="app">
     <NavBar />
     <router-view />
+    <VirtualGuide />
   </div>
 </template>
 
 <script setup lang="ts">
 import NavBar from '@/components/NavBar.vue'
+import VirtualGuide from '@/components/VirtualGuide.vue'
 </script>
 
 <style>
