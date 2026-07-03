@@ -1,13 +1,14 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from ...services.llm_service import get_llm
 
 router = APIRouter(tags=["guide"])
 
 class GuideChatRequest(BaseModel):
     text: str
+    history: Optional[List[dict]] = []
     
 # System Prompt 赋予导游人设
 GUIDE_SYSTEM_PROMPT = """
@@ -16,7 +17,11 @@ GUIDE_SYSTEM_PROMPT = """
 请遵循以下规则回答用户：
 1. 语气必须活泼可爱，可以适当地使用像“哇哦！”、“好耶！”、“嗯嗯~”这样的语气词。
 2. 用户的提问通常是关于旅游、行程、或者对你的调侃。
-3. **最重要**：你的回答将被转为语音播报，因此每次回答请务必控制在 50 字以内，尽量简短精炼，不要出现复杂的 markdown 格式（如表格、加粗符号等），只能输出纯文本和基础标点符号。
+3. **最重要**：你的回答将被直接送入语音合成引擎 (TTS) 播报。因此：
+   - 每次回答请务必控制在 50 字以内，尽量简短精炼。
+   - **绝对禁止**使用任何颜文字、Emoji表情符号（如 😊、(●'◡'●) 等）。
+   - **绝对禁止**输出任何描写动作的词语（如 *蹦跳*、*开心*、[微笑]、*探头* 等）。
+   - 只能输出纯净的中文文本和基础标点符号，不能有任何让语音引擎无法正常朗读的字符。
 """
 
 @router.post("/guide/chat")
@@ -30,10 +35,22 @@ async def guide_chat(request: GuideChatRequest):
     try:
         llm = get_llm()
         
-        messages = [
-            SystemMessage(content=GUIDE_SYSTEM_PROMPT),
-            HumanMessage(content=request.text)
-        ]
+        messages = [SystemMessage(content=GUIDE_SYSTEM_PROMPT)]
+        
+        # 拼接短期记忆 (上下文)
+        if request.history:
+            # 限制最多携带最近的 10 条对话记录，避免上下文溢出
+            recent_history = request.history[-10:]
+            for msg in recent_history:
+                role = msg.get("role")
+                content = msg.get("content", "")
+                if role == "user":
+                    messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    messages.append(AIMessage(content=content))
+                    
+        # 拼接最新的提问
+        messages.append(HumanMessage(content=request.text))
         
         response = await llm.ainvoke(messages)
         

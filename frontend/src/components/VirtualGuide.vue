@@ -49,6 +49,7 @@ const inputText = ref<string>('');
 const isReady = ref<boolean>(false);
 const isSpeaking = ref<boolean>(false);
 const isRecording = ref<boolean>(false);
+const chatHistory = ref<{role: string, content: string}[]>([]); // 智能体的短期记忆
 
 let app: any = null;
 let model: any = null;
@@ -163,6 +164,9 @@ const playAudioWithLipSync = async (audioUrl: string) => {
 
     const analyser = audioContext!.createAnalyser();
     analyser.fftSize = 256;
+    // 关键优化：大幅削弱平滑滤镜，让音量突变立刻反映，消除首字吞音
+    analyser.smoothingTimeConstant = 0.1; 
+    
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
@@ -173,9 +177,7 @@ const playAudioWithLipSync = async (audioUrl: string) => {
       resolve();
     };
 
-    audioSource.start(0);
-
-    // 实时音量分析
+    // 先启动动画循环，让它准备好
     const updateLipSync = () => {
       if (!isSpeaking.value || !model) return;
       analyser.getByteFrequencyData(dataArray);
@@ -186,8 +188,17 @@ const playAudioWithLipSync = async (audioUrl: string) => {
       }
       const average = sum / bufferLength;
       
-      let mouthValue = (average / 255) * 3.0; // 放大系数，使嘴型更明显
-      if (mouthValue > 1) mouthValue = 1;
+      let mouthValue = 0;
+      // 过滤极微小的底噪
+      if (average > 1) { 
+        let normalized = average / 255;
+        // 关键优化：非线性超强增益。将小音量极速放大 5 倍
+        mouthValue = normalized * 5.0; 
+        
+        // 关键优化：只要有声音，嘴巴至少张开 30%，告别“跟不上”的错觉
+        if (mouthValue < 0.3) mouthValue = 0.3; 
+        if (mouthValue > 1.0) mouthValue = 1.0;
+      }
       
       // 直接设置内部物理参数
       if (model.internalModel && model.internalModel.coreModel) {
@@ -196,7 +207,11 @@ const playAudioWithLipSync = async (audioUrl: string) => {
       
       requestAnimationFrame(updateLipSync);
     };
-    updateLipSync();
+    
+    requestAnimationFrame(updateLipSync);
+    
+    // 动画循环就位后再开始发声
+    audioSource.start(0);
   });
 };
 
@@ -210,21 +225,30 @@ const handleSend = async () => {
     chatMessage.value = '让我想想哦... (●\'◡\'●)';
     inputText.value = ''; 
     
-    // 1. 调用大模型 (LLM) 接口获取回答
+    // 1. 调用大模型 (LLM) 接口获取回答，携带短期记忆
     const chatResponse = await fetch('/api/guide/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text })
+      body: JSON.stringify({ 
+        text: text,
+        history: chatHistory.value // 传入上下文
+      })
     });
     
     if (!chatResponse.ok) throw new Error(`LLM Error: ${chatResponse.status}`);
     const chatData = await chatResponse.json();
     const replyText = chatData.reply;
     
-    // 2. 将回答展示在气泡中
-    chatMessage.value = replyText;
+    // 更新短期记忆
+    chatHistory.value.push({ role: 'user', content: text });
+    chatHistory.value.push({ role: 'assistant', content: replyText });
     
-    // 3. 调用 TTS 接口将回答转成语音
+    // 限制前端记忆长度 (保留最近 10 条)
+    if (chatHistory.value.length > 10) {
+      chatHistory.value = chatHistory.value.slice(-10);
+    }
+    
+    // 2. 调用 TTS 接口将回答转成语音
     const ttsResponse = await fetch('/api/tts/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -235,7 +259,10 @@ const handleSend = async () => {
     const ttsData = await ttsResponse.json();
     const audioUrl = ttsData.url;
     
-    // 4. 播放并触发同步口型
+    // 关键优化：时序对齐，音频准备就绪后再让字出来，消除等待的割裂感
+    chatMessage.value = replyText;
+    
+    // 3. 播放并触发同步口型
     await playAudioWithLipSync(audioUrl);
     
     // 气泡停留一段时间后消失
