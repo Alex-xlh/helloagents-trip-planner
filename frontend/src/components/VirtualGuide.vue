@@ -1,31 +1,272 @@
 <template>
-  <div class="virtual-guide-container">
-    <div v-if="errorMessage" class="error-box">{{ errorMessage }}</div>
+  <div 
+    class="virtual-guide-container" 
+    :style="containerStyle" 
+    @mousedown="onMouseDown"
+  >
+    <!-- 聊天气泡 -->
+    <div class="chat-bubble" v-if="chatMessage">
+      {{ chatMessage }}
+    </div>
+    
     <canvas ref="canvasRef"></canvas>
+    
+    <!-- 聊天输入框 (不再遮挡，按顺序排布) -->
+    <div class="chat-input-container" v-if="isReady">
+      <input 
+        v-model="inputText" 
+        @keyup.enter="handleSend" 
+        placeholder="和向导聊聊..." 
+        :disabled="isSpeaking"
+        @mousedown.stop
+      />
+      <!-- 麦克风按钮 -->
+      <button 
+        class="icon-btn" 
+        @click="toggleRecording" 
+        :class="{ recording: isRecording }"
+        @mousedown.stop
+        title="语音输入"
+      >
+        🎙️
+      </button>
+      <button 
+        class="primary-btn"
+        @click="handleSend" 
+        :disabled="isSpeaking || !inputText.trim()"
+        @mousedown.stop
+      >发送</button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
-const errorMessage = ref<string>('状态: 准备初始化');
+const chatMessage = ref<string>('');
+const inputText = ref<string>('');
+const isReady = ref<boolean>(false);
+const isSpeaking = ref<boolean>(false);
+const isRecording = ref<boolean>(false);
+
 let app: any = null;
 let model: any = null;
+let audioContext: AudioContext | null = null;
+let audioSource: AudioBufferSourceNode | null = null;
+let recognition: any = null;
+
+// ================= 拖拽逻辑 =================
+const position = ref({ x: window.innerWidth - 340, y: window.innerHeight - 500 });
+const containerStyle = computed(() => ({
+  left: `${position.value.x}px`,
+  top: `${position.value.y}px`
+}));
+
+let isDragging = false;
+let startPos = { x: 0, y: 0 };
+let startOffset = { x: 0, y: 0 };
+
+const onMouseDown = (e: MouseEvent) => {
+  isDragging = true;
+  startPos = { x: e.clientX, y: e.clientY };
+  startOffset = { x: position.value.x, y: position.value.y };
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+};
+
+const onMouseMove = (e: MouseEvent) => {
+  if (!isDragging) return;
+  let newX = startOffset.x + (e.clientX - startPos.x);
+  let newY = startOffset.y + (e.clientY - startPos.y);
+  
+  // 边界限制，让它能在上半部分甚至任何地方移动，只要不完全出屏幕
+  if(newX < -150) newX = -150;
+  if(newY < -50) newY = -50;
+  if(newX > window.innerWidth - 150) newX = window.innerWidth - 150;
+  if(newY > window.innerHeight - 100) newY = window.innerHeight - 100;
+  
+  position.value.x = newX;
+  position.value.y = newY;
+};
+
+const onMouseUp = () => {
+  isDragging = false;
+  document.removeEventListener('mousemove', onMouseMove);
+  document.removeEventListener('mouseup', onMouseUp);
+};
+
+// ================= 语音识别逻辑 (麦克风) =================
+const initSpeechRecognition = () => {
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    console.warn("当前浏览器不支持 Web Speech API");
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.lang = 'zh-CN';
+  recognition.interimResults = false;
+  recognition.continuous = false;
+
+  recognition.onresult = (event: any) => {
+    const transcript = event.results[0][0].transcript;
+    inputText.value = transcript;
+    isRecording.value = false;
+    handleSend(); // 语音识别结束后自动发送
+  };
+
+  recognition.onerror = (event: any) => {
+    console.error("语音识别错误:", event.error);
+    isRecording.value = false;
+  };
+
+  recognition.onend = () => {
+    isRecording.value = false;
+  };
+};
+
+const toggleRecording = () => {
+  if (!recognition) {
+    alert("您的浏览器不支持语音输入功能。");
+    return;
+  }
+  if (isRecording.value) {
+    recognition.stop();
+    isRecording.value = false; // 强制立刻更新状态，防止UI卡死
+  } else {
+    inputText.value = '';
+    try {
+      recognition.start();
+      isRecording.value = true;
+    } catch(e) {
+      console.warn("录音已在运行中", e);
+    }
+  }
+};
+
+// ================= 自定义 Web Audio 播放与口型同步 =================
+const playAudioWithLipSync = async (audioUrl: string) => {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
+
+  const response = await fetch(audioUrl);
+  const arrayBuffer = await response.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+  return new Promise<void>((resolve) => {
+    audioSource = audioContext!.createBufferSource();
+    audioSource.buffer = audioBuffer;
+
+    const analyser = audioContext!.createAnalyser();
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    audioSource.connect(analyser);
+    analyser.connect(audioContext!.destination);
+
+    audioSource.onended = () => {
+      resolve();
+    };
+
+    audioSource.start(0);
+
+    // 实时音量分析
+    const updateLipSync = () => {
+      if (!isSpeaking.value || !model) return;
+      analyser.getByteFrequencyData(dataArray);
+      
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / bufferLength;
+      
+      let mouthValue = (average / 255) * 3.0; // 放大系数，使嘴型更明显
+      if (mouthValue > 1) mouthValue = 1;
+      
+      // 直接设置内部物理参数
+      if (model.internalModel && model.internalModel.coreModel) {
+        model.internalModel.coreModel.setParamFloat('PARAM_MOUTH_OPEN_Y', mouthValue);
+      }
+      
+      requestAnimationFrame(updateLipSync);
+    };
+    updateLipSync();
+  });
+};
+
+// ================= 发送消息逻辑 =================
+const handleSend = async () => {
+  const text = inputText.value.trim();
+  if (!text || isSpeaking.value) return;
+  
+  try {
+    isSpeaking.value = true;
+    chatMessage.value = '让我想想哦... (●\'◡\'●)';
+    inputText.value = ''; 
+    
+    // 1. 调用大模型 (LLM) 接口获取回答
+    const chatResponse = await fetch('/api/guide/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text })
+    });
+    
+    if (!chatResponse.ok) throw new Error(`LLM Error: ${chatResponse.status}`);
+    const chatData = await chatResponse.json();
+    const replyText = chatData.reply;
+    
+    // 2. 将回答展示在气泡中
+    chatMessage.value = replyText;
+    
+    // 3. 调用 TTS 接口将回答转成语音
+    const ttsResponse = await fetch('/api/tts/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: replyText })
+    });
+    
+    if (!ttsResponse.ok) throw new Error(`TTS Error: ${ttsResponse.status}`);
+    const ttsData = await ttsResponse.json();
+    const audioUrl = ttsData.url;
+    
+    // 4. 播放并触发同步口型
+    await playAudioWithLipSync(audioUrl);
+    
+    // 气泡停留一段时间后消失
+    setTimeout(() => {
+      if (chatMessage.value === replyText) chatMessage.value = '';
+    }, 3000);
+
+  } catch (error: any) {
+    console.error("对话链路失败:", error);
+    chatMessage.value = "呜呜，大脑或者声带断线啦...";
+    setTimeout(() => { chatMessage.value = ''; }, 3000);
+  } finally {
+    isSpeaking.value = false;
+    // 强制闭嘴复位
+    if (model && model.internalModel && model.internalModel.coreModel) {
+        model.internalModel.coreModel.setParamFloat('PARAM_MOUTH_OPEN_Y', 0);
+    }
+  }
+};
 
 onMounted(async () => {
   if (!canvasRef.value) return;
+  initSpeechRecognition();
 
   try {
-    errorMessage.value = '状态: 正在获取全局 PIXI 引擎...';
-    // 直接从全局 window 获取挂载好的对象
+    console.log('[Live2D] 正在获取全局 PIXI 引擎...');
     const PIXI = (window as any).PIXI;
-    if (!PIXI || !PIXI.live2d) {
-      throw new Error("PIXI 核心引擎未正确加载，请检查 index.html");
-    }
+    if (!PIXI || !PIXI.live2d) throw new Error("PIXI 核心引擎未挂载");
     const Live2DModel = PIXI.live2d.Live2DModel;
 
-    errorMessage.value = '状态: 正在初始化 PIXI Application...';
+    console.log('[Live2D] 初始化 PIXI Application...');
     app = new PIXI.Application({
       view: canvasRef.value,
       backgroundAlpha: 0,
@@ -35,78 +276,162 @@ onMounted(async () => {
       resolution: window.devicePixelRatio || 1,
     });
 
-    errorMessage.value = '状态: 正在加载 Live2D 模型文件...';
+    console.log('[Live2D] 开始加载模型文件...');
     const modelUrl = '/shizuku/shizuku.model.json';
-    
     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("模型加载超时")), 10000));
     model = await Promise.race([Live2DModel.from(modelUrl), timeoutPromise]);
     
-    errorMessage.value = '状态: 模型加载成功！正在设置舞台...';
-    
-    // 使用锚点 (Anchor) 将模型的重心定位在底部的中心
+    console.log('[Live2D] 模型加载成功！设置舞台...');
     model.anchor.set(0.5, 1);
-    
-    // 固定一个经验缩放比例（大部分 Cubism 模型适用）。如果模型依然偏大，可以微调这个值
-    const scale = 0.2; 
-    model.scale.set(scale);
-    
-    // 钉死在画布底部中心
+    model.scale.set(0.2); 
     model.x = 150; 
     model.y = 400;
 
     app.stage.addChild(model);
     
+    // 点击触发肢体动作
     model.on('pointerdown', () => {
       model.motion('tap_body');
     });
 
-    errorMessage.value = '状态: 一切就绪！(正常情况下您应该能看到模型了)';
-    setTimeout(() => { errorMessage.value = ''; }, 3000);
+    console.log('[Live2D] 虚拟导游一切就绪！');
+    isReady.value = true;
 
   } catch (error: any) {
-    console.error("加载 Live2D 模型失败:", error);
-    errorMessage.value = "错误: " + (error.message || String(error));
+    console.error("[Live2D] 致命错误:", error);
   }
 });
 
 onBeforeUnmount(() => {
-  if (model) {
-    model.destroy();
-  }
-  if (app) {
-    app.destroy(false, { children: true });
-  }
+  if (audioSource) audioSource.stop();
+  if (audioContext) audioContext.close();
+  if (model) model.destroy();
+  if (app) app.destroy(false, { children: true });
 });
 </script>
 
 <style scoped>
 .virtual-guide-container {
   position: fixed;
-  bottom: 0px;
-  right: 20px;
   width: 300px;
-  height: 400px;
-  z-index: 9999; /* 悬浮在最顶层 */
-  pointer-events: none; /* 让鼠标穿透透明区域，不影响底层地图点击 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 9999;
+  cursor: grab;
+  /* 捕获鼠标事件以支持拖拽，但在模型透明区域能点下去 */
+  pointer-events: auto; 
+}
+
+.virtual-guide-container:active {
+  cursor: grabbing;
+}
+
+.chat-bubble {
+  position: relative;
+  background: white;
+  color: #333;
+  padding: 10px 16px;
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  font-size: 14px;
+  white-space: nowrap;
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  margin-bottom: -50px; /* 大幅下沉，贴近虚拟人头部 */
+  z-index: 10000;
+  pointer-events: none; /* 防止干扰拖拽 */
+}
+
+.chat-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 8px 8px 0;
+  border-style: solid;
+  border-color: white transparent transparent transparent;
 }
 
 .virtual-guide-container canvas {
-  pointer-events: auto; /* 仅捕捉模型自身的鼠标事件 */
-  cursor: pointer;
-  width: 100%;
-  height: 100%;
+  width: 300px;
+  height: 400px;
+  /* 关键：穿透画布允许拖拽 */
+  pointer-events: none; 
 }
-.error-box {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  background: rgba(255, 0, 0, 0.8);
+
+.chat-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.95);
+  padding: 8px 12px;
+  border-radius: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  margin-top: -10px; /* 紧贴画布底部，不遮挡人物本身 */
+  z-index: 10001;
+  pointer-events: auto; /* 允许点击输入框 */
+}
+
+.chat-input-container input {
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 4px;
+  font-size: 14px;
+  width: 130px;
+  color: #333;
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.icon-btn.recording {
+  background: #ff4757;
   color: white;
-  padding: 10px;
-  border-radius: 4px;
+  animation: pulse 1.5s infinite;
+}
+
+.primary-btn {
+  border: none;
+  background: #007bff;
+  color: white;
+  border-radius: 16px;
+  padding: 6px 14px;
+  cursor: pointer;
   font-size: 12px;
-  z-index: 10000;
-  word-wrap: break-word;
+  transition: background 0.2s;
+}
+
+.primary-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.4); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(255, 71, 87, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
 }
 </style>

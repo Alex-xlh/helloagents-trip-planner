@@ -12,6 +12,8 @@ from ..models.db import Base
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from ..core.limiter import limiter
+from fastapi.staticfiles import StaticFiles
+import os
 
 # 获取配置
 settings = get_settings()
@@ -108,11 +110,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 确保 static 目录存在
+os.makedirs("static/tts", exist_ok=True)
+# 挂载静态文件目录，用于返回音频文件
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # 注册路由
 app.include_router(trip.router, prefix="/api")
 app.include_router(poi.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
+from .routes import tts
+from .routes import guide
+app.include_router(tts.router, prefix="/api")
+app.include_router(guide.router, prefix="/api")
 
 @app.get("/")
 async def root():
