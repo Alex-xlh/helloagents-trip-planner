@@ -6,6 +6,7 @@ import contextlib
 import json
 import re
 from typing import List, Dict, Any, Optional
+from loguru import logger
 from ..config import get_settings
 
 from mcp.client.stdio import stdio_client, StdioServerParameters
@@ -31,8 +32,9 @@ async def init_mcp_client():
         if _mcp_pool_initialized:
             return
             
-        print("🔄 正在初始化 MCP 并发连接池 (容量: 3)...")
         settings = get_settings()
+        pool_size = max(1, settings.mcp_pool_size)
+        logger.info(f"正在初始化 MCP 并发连接池 (容量: {pool_size}, 离线模式: {'开启' if settings.mcp_offline else '关闭'})")
         if not settings.amap_api_key:
             raise ValueError("高德地图API Key未配置,请在.env文件中设置AMAP_API_KEY")
             
@@ -40,18 +42,20 @@ async def init_mcp_client():
         env["AMAP_MAPS_API_KEY"] = settings.amap_api_key
 
         command_name = "uvx.exe" if os.name == 'nt' else "uvx"
+        server_args = ["amap-mcp-server"]
+        if settings.mcp_offline:
+            server_args.insert(0, "--offline")
+
         server_params = StdioServerParameters(
             command=command_name,
-            args=["--offline", "amap-mcp-server"],
+            args=server_args,
             env=env
         )
         
         try:
             _mcp_pool = asyncio.Queue()
-            POOL_SIZE = 3
-            
-            for i in range(POOL_SIZE):
-                print(f"  - 正在启动 Node.js MCP 进程 {i+1}/{POOL_SIZE} ...")
+            for i in range(pool_size):
+                logger.info(f"正在启动 Node.js MCP 进程 {i+1}/{pool_size}")
                 # 建立持久化的进程和管道上下文
                 transport = await _mcp_exit_stack.enter_async_context(stdio_client(server_params))
                 read, write = transport
@@ -64,9 +68,9 @@ async def init_mcp_client():
                 await _mcp_pool.put(session)
                 
             _mcp_pool_initialized = True
-            print("✅ MCP 并发连接池拉起成功！(彻底消除单通道死锁，实现物理并发)")
+            logger.info("MCP 并发连接池拉起成功")
         except Exception as e:
-            print(f"❌ 初始化 MCP 长连接池失败: {e}")
+            logger.error(f"初始化 MCP 长连接池失败: {e}")
             await _mcp_exit_stack.aclose()
             _mcp_pool_initialized = False
             raise
@@ -74,16 +78,16 @@ async def init_mcp_client():
 async def close_mcp_client():
     """安全释放MCP长连接"""
     global _mcp_pool, _mcp_pool_initialized
-    print("🧹 正在释放 MCP 连接池资源...")
+    logger.info("正在释放 MCP 连接池资源")
     await _mcp_exit_stack.aclose()
     _mcp_pool = None
     _mcp_pool_initialized = False
-    print("✅ MCP 资源已安全回收。")
+    logger.info("MCP 资源已安全回收")
 
 async def _call_mcp_tool_async(tool_name: str, arguments: dict) -> str:
     """使用MCP SDK异步调用工具(从连接池中获取)"""
     if not _mcp_pool_initialized:
-        print("⚠️ 检测到 MCP 连接池尚未建立，正在进行临时初始化...")
+        logger.warning("检测到 MCP 连接池尚未建立，正在进行临时初始化")
         await init_mcp_client()
         
     # 从连接池中借用一个通道（如果满了则挂起等待）
@@ -165,7 +169,7 @@ async def amap_maps_text_search(keywords: str, city: str, limit: int = 30) -> st
                         if api_pois and len(api_pois) > 0:
                             return api_pois[0].get("location", fallback_loc)
                 except Exception as e:
-                    print(f"⚠️ 高德原生 API 坐标纠偏失败({poi_name}): {e}")
+                    logger.warning(f"高德原生 API 坐标纠偏失败({poi_name}): {e}")
                 return fallback_loc
 
             # 并发获取精准坐标
@@ -199,7 +203,7 @@ async def amap_maps_text_search(keywords: str, city: str, limit: int = 30) -> st
             # 返回极简JSON，禁用了ASCII以减少Unicode转义的Token开销
             return json.dumps(cleaned_pois, ensure_ascii=False)
         except Exception as e:
-            print(f"⚠️ POI数据清洗失败: {e}")
+            logger.warning(f"POI数据清洗失败: {e}")
             return raw_result
     return raw_result
 
@@ -227,6 +231,6 @@ async def amap_maps_weather(city: str) -> str:
                     })
             return json.dumps(cleaned_weather, ensure_ascii=False)
         except Exception as e:
-            print(f"⚠️ 天气数据清洗失败: {e}")
+            logger.warning(f"天气数据清洗失败: {e}")
             return raw_result
     return raw_result

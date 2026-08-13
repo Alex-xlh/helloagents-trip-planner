@@ -49,7 +49,7 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-t r i p s . d b  
+trips.db
  
 # Static files (TTS audio cache)
 static/  

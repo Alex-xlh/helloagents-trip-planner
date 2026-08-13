@@ -1,7 +1,6 @@
 """配置管理模块"""
 
 import os
-from pathlib import Path
 from typing import List
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
@@ -30,11 +29,21 @@ class Settings(BaseSettings):
     # 高德地图API配置
     amap_api_key: str = ""
 
+    # MCP config
+    mcp_pool_size: int = 3
+    mcp_offline: bool = False
+
     # Database config
     database_url: str = "sqlite+aiosqlite:///trips.db"
+
+    # Redis config
+    redis_url: str = "redis://localhost:6379/0"
     
     # Auth config
     jwt_secret_key: str = "change-me-in-production"
+
+    # TTS config
+    tts_max_age_hours: int = 24
     
     # Unsplash API配置
     unsplash_access_key: str = ""
@@ -97,6 +106,10 @@ def print_config():
     print(f"版本: {settings.app_version}")
     print(f"服务器: {settings.host}:{settings.port}")
     print(f"高德地图API Key: {'已配置' if settings.amap_api_key else '未配置'}")
+    print(f"MCP连接池容量: {settings.mcp_pool_size}")
+    print(f"MCP离线模式: {'开启' if settings.mcp_offline else '关闭'}")
+    print(f"Redis: {'已配置' if settings.redis_url else '未配置'}")
+    print(f"TTS音频保留: {settings.tts_max_age_hours}小时")
 
     # 检查LLM配置
     llm_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -107,4 +120,3 @@ def print_config():
     print(f"LLM Base URL: {llm_base_url}")
     print(f"LLM Model: {llm_model}")
     print(f"日志级别: {settings.log_level}")
-

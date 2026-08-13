@@ -7,8 +7,11 @@ from ..config import get_settings, validate_config, print_config
 from .routes import trip, poi, auth, history
 from ..services.amap_service import init_mcp_client, close_mcp_client
 from ..core.http_client import init_http_client, close_http_client
+from ..core.redis_client import close_redis_client
 from ..core.database import engine
 from ..models.db import Base
+from ..core.logging import setup_logging
+from loguru import logger
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from ..core.limiter import limiter
@@ -17,14 +20,13 @@ import os
 
 # 获取配置
 settings = get_settings()
+setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理器"""
     # === 启动时执行的逻辑 (Startup) ===
-    print("\n" + "="*60)
-    print(f"[{settings.app_name} v{settings.app_version}]")
-    print("="*60)
+    logger.info(f"{settings.app_name} v{settings.app_version} 启动中")
     
     # 打印配置信息
     print_config()
@@ -32,56 +34,58 @@ async def lifespan(app: FastAPI):
     # 验证配置
     try:
         validate_config()
-        print("\n[OK] 配置验证通过")
+        logger.info("配置验证通过")
     except ValueError as e:
-        print(f"\n[ERROR] 配置验证失败:\n{e}")
-        print("\n请检查.env文件并确保所有必要的配置项都已设置")
+        logger.error(f"配置验证失败: {e}")
+        logger.error("请检查.env文件并确保所有必要的配置项都已设置")
         raise
     
-    print("\n" + "="*60)
-    print(" API文档: http://localhost:8000/docs")
-    print(" ReDoc文档: http://localhost:8000/redoc")
-    print("="*60 + "\n")
+    logger.info("API文档: http://localhost:8000/docs")
+    logger.info("ReDoc文档: http://localhost:8000/redoc")
     
     # 初始化全局MCP长连接池
     try:
         await init_mcp_client()
     except Exception as e:
-        print(f"[WARN] MCP长连接池初始化失败，将降级为请求时初始化: {e}")
+        logger.warning(f"MCP长连接池初始化失败，将降级为请求时初始化: {e}")
         
     # 初始化全局 HTTP 连接池
     try:
         await init_http_client()
     except Exception as e:
-        print(f"[ERROR] HTTP 连接池初始化失败: {e}")
+        logger.error(f"HTTP 连接池初始化失败: {e}")
         
     # 初始化数据库
     try:
         async with engine.begin() as conn:
             # 在实际生产中应该使用 alembic 进行迁移，这里简单创建表
             await conn.run_sync(Base.metadata.create_all)
-        print("[OK] 数据库表初始化成功")
+        logger.info("数据库表初始化成功")
     except Exception as e:
-        print(f"[ERROR] 数据库初始化失败: {e}")
+        logger.error(f"数据库初始化失败: {e}")
     
     yield # 让应用开始处理请求
     
     # === 关闭时执行的逻辑 (Shutdown) ===
-    print("\n" + "="*60)
-    print("应用正在关闭...")
-    print("="*60 + "\n")
+    logger.info("应用正在关闭")
     
     # 释放全局MCP长连接资源
     try:
         await close_mcp_client()
     except Exception as e:
-        print(f"[WARN] 释放MCP长连接资源失败: {e}")
+        logger.warning(f"释放MCP长连接资源失败: {e}")
 
     # 释放全局 HTTP 连接池
     try:
         await close_http_client()
     except Exception as e:
-        print(f"[WARN] 释放HTTP长连接资源失败: {e}")
+        logger.warning(f"释放HTTP长连接资源失败: {e}")
+
+    # 释放 Redis 连接资源
+    try:
+        await close_redis_client()
+    except Exception as e:
+        logger.warning(f"释放Redis连接资源失败: {e}")
 
 # 创建FastAPI应用
 app = FastAPI(

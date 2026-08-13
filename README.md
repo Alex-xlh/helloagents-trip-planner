@@ -151,7 +151,7 @@ docker compose up -d
 
 ```text
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=xlh20041109
+POSTGRES_PASSWORD=postgres
 POSTGRES_DB=trip_planner
 ```
 
@@ -161,10 +161,10 @@ POSTGRES_DB=trip_planner
 
 ```bash
 cd /Users/mac/Desktop/Alex/helloagents-trip-planner/backend
-touch .env
+cp .env.example .env
 ```
 
-写入：
+核心配置：
 
 ```env
 APP_NAME=智能旅行规划助手
@@ -179,10 +179,16 @@ AMAP_API_KEY=你的高德Web服务APIKey
 LLM_API_KEY=你的LLM_API_Key
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL_ID=gpt-4o-mini
+LLM_TIMEOUT=60
 
-DATABASE_URL=postgresql+asyncpg://postgres:xlh20041109@127.0.0.1:5432/trip_planner
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/trip_planner
+REDIS_URL=redis://localhost:6379/0
 JWT_SECRET_KEY=请替换成本地随机字符串
 CORS_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
+
+MCP_POOL_SIZE=3
+MCP_OFFLINE=false
+TTS_MAX_AGE_HOURS=24
 ```
 
 如果使用 DeepSeek，可改成：
@@ -199,7 +205,7 @@ LLM_MODEL_ID=deepseek-chat
 DATABASE_URL=sqlite+aiosqlite:///trips.db
 ```
 
-Redis 地址目前在代码里固定为 `redis://localhost:6379/0`，所以需要本机 Redis 可访问；如果 Redis 没启动，生成行程仍会尝试继续，但缓存会失效并打印警告。
+Redis 地址由 `REDIS_URL` 控制。如果 Redis 没启动，生成行程仍会尝试继续，但缓存会失效并打印警告。
 
 ### 3. 安装并启动后端
 
@@ -209,6 +215,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+alembic -c alembic.ini upgrade head
 python run.py
 ```
 
@@ -225,7 +232,7 @@ http://127.0.0.1:8000/health
 
 ```bash
 cd /Users/mac/Desktop/Alex/helloagents-trip-planner/frontend
-touch .env
+cp .env.example .env
 ```
 
 写入：
@@ -254,13 +261,19 @@ http://127.0.0.1:3000
 
 ## 高德 MCP 初始化说明
 
-后端启动时会初始化高德 MCP 连接池。代码中使用：
+后端启动时会初始化高德 MCP 连接池。默认开发模式会自动解析 `amap-mcp-server`：
 
 ```text
-uvx --offline amap-mcp-server
+MCP_OFFLINE=false
 ```
 
-这意味着如果你的 Mac 从未缓存过 `amap-mcp-server`，第一次可能会因为离线模式找不到包而失败。可以先联网执行一次：
+生产环境如果希望完全依赖预热缓存，可设置：
+
+```text
+MCP_OFFLINE=true
+```
+
+如果启用离线模式，需要先联网执行一次预热：
 
 ```bash
 cd /Users/mac/Desktop/Alex/helloagents-trip-planner/backend
@@ -297,6 +310,12 @@ http://127.0.0.1:8000/docs
 - `DELETE /api/history/{trip_id}`：删除历史行程
 - `POST /api/guide/chat`：虚拟导游聊天
 - `POST /api/tts/generate`：生成 TTS 音频
+
+高成本接口已启用限流：
+
+- 旅行规划：`3/minute`、`20/hour`
+- 虚拟导游聊天：`20/minute`
+- TTS：`20/minute`
 
 ## 常见问题
 
@@ -374,7 +393,10 @@ start_frontend.bat
 
 ## 开发备注
 
-- 后端启动时会自动创建数据库表，生产环境建议改为 Alembic 迁移。
-- 当前 Redis 地址写死在 `backend/app/core/redis_client.py`，后续可以改为从 `.env` 读取。
+- 后端已接入 Alembic，推荐用 `alembic -c alembic.ini upgrade head` 管理数据库迁移。
+- 后端启动时仍保留 `create_all` 兜底，方便本地开发。
+- Redis 地址通过 `REDIS_URL` 配置。
+- TTS 音频缓存默认保留 24 小时，可通过 `TTS_MAX_AGE_HOURS` 调整。
+- MCP 连接池容量和离线模式通过 `MCP_POOL_SIZE`、`MCP_OFFLINE` 配置。
 - `frontend/.env` 里的高德 JS Key 属于前端公开变量，不应放置后端私密 Key。
 - 请不要提交真实的后端 `.env`、数据库文件、TTS 生成音频缓存和本地 Live2D 大文件。
