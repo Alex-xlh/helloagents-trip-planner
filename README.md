@@ -196,8 +196,10 @@ TTS_MAX_AGE_HOURS=24
 ```env
 LLM_API_KEY=你的DeepSeekKey
 LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_MODEL_ID=deepseek-chat
+LLM_MODEL_ID=deepseek-v4-flash
 ```
+
+项目会在检测到 `LLM_BASE_URL` 包含 `deepseek` 时，自动为 DeepSeek V4 请求追加 `thinking disabled` 参数。旅行规划属于高频结构化 JSON 生成任务，默认关闭思考模式可以显著降低 `Planner Agent` 等待时间；实测本地从百秒级下降到约 11 秒。
 
 如果不想启动 PostgreSQL，也可以临时使用 SQLite：
 
