@@ -6,9 +6,9 @@ services:
     image: postgres:15-alpine
     container_name: trip_planner_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: xlh20041109
-      POSTGRES_DB: trip_planner
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-trip_planner}
     ports:
       - "15432:5432"
     volumes:

@@ -1,5 +1,6 @@
-import httpx
 from typing import Optional
+import httpx
+from loguru import logger
 
 # 全局 HTTP 客户端，支持连接池复用
 _http_client: Optional[httpx.AsyncClient] = None
@@ -19,7 +20,7 @@ async def init_http_client():
             timeout=15.0,
             limits=httpx.Limits(max_keepalive_connections=50, max_connections=100)
         )
-        print("✅ HTTP 并发连接池初始化成功")
+        logger.info("HTTP 并发连接池初始化成功")
 
 async def close_http_client():
     """关闭全局 HTTP 客户端（在 FastAPI lifespan 关闭时调用）"""
@@ -27,4 +28,4 @@ async def close_http_client():
     if _http_client is not None:
         await _http_client.aclose()
         _http_client = None
-        print("🧹 HTTP 并发连接池已安全释放")
+        logger.info("HTTP 并发连接池已安全释放")

@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from loguru import logger
 from ...services.llm_service import get_llm
+from ...core.limiter import limiter
 
 router = APIRouter(tags=["guide"])
 
@@ -25,11 +27,12 @@ GUIDE_SYSTEM_PROMPT = """
 """
 
 @router.post("/guide/chat")
-async def guide_chat(request: GuideChatRequest):
+@limiter.limit("20/minute")
+async def guide_chat(request: Request, guide_request: GuideChatRequest):
     """
     接收用户与虚拟导游的聊天内容，返回简短的 AI 语音文案
     """
-    if not request.text or not request.text.strip():
+    if not guide_request.text or not guide_request.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
         
     try:
@@ -38,9 +41,9 @@ async def guide_chat(request: GuideChatRequest):
         messages = [SystemMessage(content=GUIDE_SYSTEM_PROMPT)]
         
         # 拼接短期记忆 (上下文)
-        if request.history:
+        if guide_request.history:
             # 限制最多携带最近的 10 条对话记录，避免上下文溢出
-            recent_history = request.history[-10:]
+            recent_history = guide_request.history[-10:]
             for msg in recent_history:
                 role = msg.get("role")
                 content = msg.get("content", "")
@@ -50,13 +53,13 @@ async def guide_chat(request: GuideChatRequest):
                     messages.append(AIMessage(content=content))
                     
         # 拼接最新的提问
-        messages.append(HumanMessage(content=request.text))
+        messages.append(HumanMessage(content=guide_request.text))
         
         response = await llm.ainvoke(messages)
         
         return {"reply": response.content}
         
     except Exception as e:
-        print(f"[ERROR] Guide Chat Failed: {e}")
+        logger.exception(f"虚拟导游聊天失败: {e}")
         # 提供一个友好的降级回复，以防 LLM 调用失败（例如没配 API Key）
         return {"reply": "哎呀，我的大脑暂时断线了，请检查一下后端的模型配置哦~"}

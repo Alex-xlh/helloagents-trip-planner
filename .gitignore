@@ -1,0 +1,9 @@
+.npm-cache/
+.uv-cache/
+.python/
+frontend/.env
+frontend/dist/
+backend/static/
+backend/__pycache__/
+backend/app/**/__pycache__/
+backend/alembic/**/__pycache__/
